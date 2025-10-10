@@ -4,9 +4,9 @@
 
 ---
 
-### Executive Summary
+### Summary
 
-We're building a smart job application system that makes job hunting less painful and more effective. Our platform uses **Akka Cluster Sharding** to run multiple AI agents that work together—they research companies, customize resumes to match specific job descriptions and company cultures, reach out to recruiters, and track where each application stands.
+Built a smart job application system that makes job hunting less painful and more effective. Our platform uses **Akka Cluster Sharding** to run multiple AI agents that work together—they research companies, customize resumes to match specific job descriptions and company cultures, reach out to recruiters, and track where each application stands.
 
 When you apply for a job, the system:
 - Reads the job posting and company profile.
