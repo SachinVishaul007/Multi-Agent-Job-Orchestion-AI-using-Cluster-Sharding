@@ -15,7 +15,7 @@ When you apply for a job, the system:
 - Reminds you to follow up.
 - Shows you real-time updates on your progress.
 
-We're combining **RAG technology** with an **actor-based architecture** to create something that's both technically impressive and actually useful for job seekers.
+We're combining **RAG technology** with an **actor-based architecture** to create something that's useful for job seekers.
 
 #### Behind the Scenes
 
