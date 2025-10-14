@@ -1,6 +1,6 @@
 # Akka Job Orchestrator AI
 
-## Project Proposal: AI-Powered Job Application Pipeline with Akka Cluster Sharding
+## AI-Powered Job Application Pipeline with Akka Cluster Sharding
 
 ---
 
