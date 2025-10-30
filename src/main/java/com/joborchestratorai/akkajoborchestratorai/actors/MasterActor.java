@@ -8,7 +8,6 @@ import com.joborchestratorai.akkajoborchestratorai.models.ResumeData;
 import com.joborchestratorai.akkajoborchestratorai.models.SearchResult;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 public class MasterActor extends AbstractBehavior<MasterActor.Command> {
 
@@ -23,16 +22,15 @@ public class MasterActor extends AbstractBehavior<MasterActor.Command> {
     public static class ProcessJobDescription implements Command {
         public final String jobDescription;
         public final int topK;
-        public final CompletableFuture<List<SearchResult>> resultFuture;
+        public final ActorRef<List<SearchResult>> replyTo;
 
-        public ProcessJobDescription(String jobDescription, int topK, CompletableFuture<List<SearchResult>> resultFuture) {
+        public ProcessJobDescription(String jobDescription, int topK, ActorRef<List<SearchResult>> replyTo) {
             this.jobDescription = jobDescription;
             this.topK = topK;
-            this.resultFuture = resultFuture;
+            this.replyTo = replyTo;
         }
     }
 
-    // FIXED: Added "implements Command"
     public static class StoreResumeData implements Command {
         public final ResumeData resumeData;
         public StoreResumeData(ResumeData resumeData) { this.resumeData = resumeData; }
@@ -57,13 +55,17 @@ public class MasterActor extends AbstractBehavior<MasterActor.Command> {
 
     public static class AdaptedSearchComplete implements Command {
         public final SearchComplete searchComplete;
-        public AdaptedSearchComplete(SearchComplete searchComplete) { this.searchComplete = searchComplete; }
+        public final ActorRef<List<SearchResult>> originalReplyTo;
+
+        public AdaptedSearchComplete(SearchComplete searchComplete, ActorRef<List<SearchResult>> originalReplyTo) {
+            this.searchComplete = searchComplete;
+            this.originalReplyTo = originalReplyTo;
+        }
     }
 
     private final ActorRef<Object> storageActor;
     private final ActorRef<Object> openAIActor;
     private final ActorRef<ProcessExcelFile> fileReaderActor;
-    private ProcessJobDescription currentJobSearch;
 
     public static Behavior<Command> create() {
         return Behaviors.setup(MasterActor::new);
@@ -90,17 +92,20 @@ public class MasterActor extends AbstractBehavior<MasterActor.Command> {
     }
 
     private Behavior<Command> onProcessJobDescription(ProcessJobDescription msg) {
-        currentJobSearch = msg;
-        ActorRef<SearchComplete> responseAdapter = getContext().messageAdapter(SearchComplete.class, AdaptedSearchComplete::new);
+        // Create a message adapter to convert the response
+        ActorRef<SearchComplete> responseAdapter = getContext().messageAdapter(
+                SearchComplete.class,
+                searchComplete -> new AdaptedSearchComplete(searchComplete, msg.replyTo)
+        );
+
+        // Forward the request to openAIActor with the adapter
         openAIActor.tell(new SearchWithOpenAI(msg.jobDescription, msg.topK, responseAdapter));
         return this;
     }
 
     private Behavior<Command> onSearchComplete(AdaptedSearchComplete msg) {
-        if (currentJobSearch != null) {
-            currentJobSearch.resultFuture.complete(msg.searchComplete.results);
-            currentJobSearch = null;
-        }
+        // Reply to the original sender with the search results
+        msg.originalReplyTo.tell(msg.searchComplete.results);
         return this;
     }
 

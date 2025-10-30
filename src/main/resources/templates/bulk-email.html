@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulk Email Tool</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 2rem auto;
+        }
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            margin-bottom: 2rem;
+        }
+        .card-header {
+            background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+            color: white;
+            border-radius: 12px 12px 0 0 !important;
+            padding: 1.25rem 1.5rem;
+        }
+        .card-header h3 {
+            margin: 0;
+            font-weight: 600;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+            border: none;
+            padding: 0.5rem 1.5rem;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #5b4cc4, #8c7ae6);
+            transform: translateY(-2px);
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: #a29bfe;
+            box-shadow: 0 0 0 0.25rem rgba(108, 92, 231, 0.25);
+        }
+        .recipient-item {
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
+            background-color: white;
+            transition: all 0.2s ease;
+        }
+        .recipient-item:hover {
+            transform: translateX(4px);
+            border-left: 4px solid #6c5ce7;
+        }
+        .recipient-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .recipient-details {
+            flex-grow: 1;
+        }
+        .recipient-actions {
+            margin-left: 1rem;
+        }
+        #recipientList {
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+        .progress {
+            height: 8px;
+            margin: 1rem 0;
+        }
+        .status-message {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        .status-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h3><i class="bi bi-envelope me-2"></i>Bulk Email Tool</h3>
+                <a href="/" class="btn btn-sm btn-outline-light">
+                    <i class="bi bi-arrow-left me-1"></i> Back to App
+                </a>
+            </div>
+        </div>
+        <div class="card-body p-4">
+            <div id="statusMessage" class="d-none"></div>
+
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <label for="emailSubject" class="form-label fw-bold">Email Subject</label>
+                    <input type="text" class="form-control mb-3" id="emailSubject"
+                           placeholder="e.g., Application for [Position] at [Company]">
+
+                    <label for="emailBody" class="form-label fw-bold">Email Body</label>
+                    <textarea class="form-control mb-3" id="emailBody" rows="8"
+                              placeholder="Write your email here..."></textarea>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="includeResume">
+                        <label class="form-check-label" for="includeResume">
+                            Include resume as attachment
+                        </label>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <button class="btn btn-outline-secondary me-md-2" id="previewBtn">
+                            <i class="bi bi-eye me-1"></i> Preview
+                        </button>
+                        <button class="btn btn-primary" id="sendBtn">
+                            <i class="bi bi-send me-1"></i> Send Emails
+                            <span id="sendSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0">Recipients</h5>
+                        <span class="badge bg-primary rounded-pill" id="recipientCount">0</span>
+                    </div>
+
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="searchRecipients"
+                               placeholder="Search recipients...">
+                        <button class="btn btn-outline-secondary" type="button" id="addRecipientBtn">
+                            <i class="bi bi-plus-lg"></i> Add
+                        </button>
+                    </div>
+
+                    <div id="recipientList" class="mb-3">
+                        <!-- Recipients will be added here dynamically -->
+                        <div class="text-muted text-center py-4">
+                            <i class="bi bi-people fs-1 d-block mb-2"></i>
+                            <p class="mb-0">No recipients added yet. Add recipients using the form above.</p>
+                        </div>
+                    </div>
+
+                    <div class="progress d-none" id="progressBar">
+                        <div id="progressBarFill" class="progress-bar progress-bar-striped progress-bar-animated"
+                             role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Preview Modal -->
+<div class="modal fade" id="previewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Email Preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <strong>To:</strong>
+                    <span id="previewRecipient">[Recipient Name]</span>
+                    <span id="previewEmail" class="text-muted">(email@example.com)</span>
+                </div>
+                <div class="mb-3">
+                    <strong>Subject:</strong>
+                    <span id="previewSubject"></span>
+                </div>
+                <div class="border rounded p-3 bg-light">
+                    <div id="previewBody" style="white-space: pre-line;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary">
+                    <i class="bi bi-send me-1"></i> Send to All
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Sample data - in a real app, this would come from the server
+        const sampleRecipients = [
+            { id: 1, name: 'John Doe', email: 'john.doe@example.com', role: 'Hiring Manager' },
+            { id: 2, name: 'Jane Smith', email: 'jane.smith@example.com', role: 'Recruiter' },
+            { id: 3, name: 'Alex Johnson', email: 'alex.johnson@example.com', role: 'HR Director' }
+        ];
+
+        let recipients = [];
+
+        // DOM Elements
+        const recipientList = document.getElementById('recipientList');
+        const recipientCount = document.getElementById('recipientCount');
+        const searchInput = document.getElementById('searchRecipients');
+        const addRecipientBtn = document.getElementById('addRecipientBtn');
+        const previewBtn = document.getElementById('previewBtn');
+        const sendBtn = document.getElementById('sendBtn');
+        const statusMessage = document.getElementById('statusMessage');
+        const progressBar = document.getElementById('progressBar');
+        const progressBarFill = document.getElementById('progressBarFill');
+
+        // Initialize tooltips
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+
+        // Add sample recipients (fallback)
+        function loadSampleRecipients() {
+            recipients = [...sampleRecipients];
+            renderRecipients();
+        }
+
+        // Load recipients saved from Step 4 (index page)
+        function loadRecipientsFromStorage() {
+            try {
+                const raw = localStorage.getItem('bulkEmailRecipients');
+                if (!raw) return false;
+                const list = JSON.parse(raw);
+                if (!Array.isArray(list) || list.length === 0) return false;
+                list.forEach(email => addRecipient(email));
+                showStatus(`Loaded ${list.length} recipient(s) from Step 4 search.`, 'success');
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        // Render recipients list
+        function renderRecipients() {
+            if (recipients.length === 0) {
+                recipientList.innerHTML = `
+                        <div class="text-muted text-center py-4">
+                            <i class="bi bi-people fs-1 d-block mb-2"></i>
+                            <p class="mb-0">No recipients added yet. Add recipients using the form above.</p>
+                        </div>`;
+                recipientCount.textContent = '0';
+                return;
+            }
+
+            recipientList.innerHTML = '';
+            recipients.forEach(recipient => {
+                const recipientEl = document.createElement('div');
+                recipientEl.className = 'recipient-item';
+                recipientEl.innerHTML = `
+                        <div class="recipient-info">
+                            <div class="recipient-details">
+                                <div class="fw-bold">${recipient.name}</div>
+                                <div class="text-muted small">${recipient.role}</div>
+                                <div class="text-primary small">${recipient.email}</div>
+                            </div>
+                            <div class="recipient-actions">
+                                <button class="btn btn-sm btn-outline-danger remove-recipient" data-id="${recipient.id}">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </div>
+                        </div>`;
+                recipientList.appendChild(recipientEl);
+            });
+
+            recipientCount.textContent = recipients.length;
+
+            // Add event listeners to remove buttons
+            document.querySelectorAll('.remove-recipient').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const id = parseInt(this.getAttribute('data-id'));
+                    removeRecipient(id);
+                });
+            });
+        }
+
+        // Add a new recipient
+        function addRecipient(email) {
+            if (!email) return;
+
+            // Check if already added
+            if (recipients.some(r => r.email.toLowerCase() === email.toLowerCase())) {
+                showStatus('This email is already in the recipient list.', 'error');
+                return;
+            }
+
+            // In a real app, you would validate the email format here
+            const newRecipient = {
+                id: Date.now(),
+                name: email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                email: email,
+                role: 'Recipient'
+            };
+
+            recipients.push(newRecipient);
+            renderRecipients();
+            searchInput.value = '';
+            showStatus('Recipient added successfully!', 'success');
+        }
+
+        // Remove a recipient
+        function removeRecipient(id) {
+            recipients = recipients.filter(r => r.id !== id);
+            renderRecipients();
+            showStatus('Recipient removed.', 'success');
+        }
+
+        // Show status message
+        function showStatus(message, type = 'info') {
+            statusMessage.className = `status-message status-${type} show`;
+            statusMessage.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>${message}</span>
+                        <button type="button" class="btn-close" onclick="this.parentElement.parentElement.classList.remove('show')"></button>
+                    </div>`;
+
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                statusMessage.classList.remove('show');
+            }, 5000);
+        }
+
+        // Update progress bar
+        function updateProgress(percent) {
+            progressBarFill.style.width = `${percent}%`;
+            progressBarFill.setAttribute('aria-valuenow', percent);
+        }
+
+        // Event Listeners
+        addRecipientBtn.addEventListener('click', () => {
+            const email = searchInput.value.trim();
+            addRecipient(email);
+        });
+
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const email = searchInput.value.trim();
+                addRecipient(email);
+            }
+        });
+
+        previewBtn.addEventListener('click', () => {
+            if (recipients.length === 0) {
+                showStatus('Please add at least one recipient first.', 'error');
+                return;
+            }
+
+            const subject = document.getElementById('emailSubject').value;
+            const body = document.getElementById('emailBody').value;
+
+            if (!subject || !body) {
+                showStatus('Please fill in both subject and body before previewing.', 'error');
+                return;
+            }
+
+            // Update preview content
+            document.getElementById('previewRecipient').textContent = recipients[0].name;
+            document.getElementById('previewEmail').textContent = `(${recipients[0].email})`;
+            document.getElementById('previewSubject').textContent = subject;
+            document.getElementById('previewBody').textContent = body;
+
+            // Show modal
+            const previewModal = new bootstrap.Modal(document.getElementById('previewModal'));
+            previewModal.show();
+        });
+
+        sendBtn.addEventListener('click', async () => {
+            if (recipients.length === 0) {
+                showStatus('Please add at least one recipient.', 'error');
+                return;
+            }
+
+            const subject = document.getElementById('emailSubject').value;
+            const body = document.getElementById('emailBody').value;
+            const includeResume = document.getElementById('includeResume').checked;
+
+            if (!subject || !body) {
+                showStatus('Please fill in both subject and body before sending.', 'error');
+                return;
+            }
+
+            // Show loading state
+            const originalText = sendBtn.innerHTML;
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Sending...';
+            progressBar.classList.remove('d-none');
+
+            try {
+                // Prepare the request data
+                const emailData = {
+                    recipients: recipients.map(r => r.email),
+                    subject: subject,
+                    content: body,
+                    html: false
+                };
+
+                // Show progress
+                updateProgress(10);
+
+                // Make the API call to send emails
+                const response = await fetch('/api/email/send-bulk', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify(emailData)
+                });
+
+                updateProgress(90);
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.message || 'Failed to send emails');
+                }
+
+                const result = await response.json();
+                updateProgress(100);
+
+                showStatus(
+                    `Successfully sent ${result.recipientsCount || recipients.length} email(s)!`,
+                    'success'
+                );
+
+            } catch (error) {
+                console.error('Error sending emails:', error);
+                showStatus(
+                    `Error: ${error.message || 'Failed to send emails. Please try again.'}`,
+                    'error'
+                );
+            } finally {
+                // Reset button state after a short delay to show completion
+                setTimeout(() => {
+                    sendBtn.disabled = false;
+                    sendBtn.innerHTML = originalText;
+                    progressBar.classList.add('d-none');
+                }, 1000);
+            }
+        });
+
+        // Load sample data
+        // Prefer recipients from Step 4; fallback to samples
+        if (!loadRecipientsFromStorage()) {
+            loadSampleRecipients();
+        }
+    });
+</script>
+</body>
+</html>

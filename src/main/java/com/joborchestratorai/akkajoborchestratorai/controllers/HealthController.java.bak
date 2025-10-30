@@ -1,0 +1,311 @@
+package com.joborchestratorai.akkajoborchestratorai.controllers;
+
+import akka.actor.typed.ActorSystem;
+import akka.cluster.Cluster;
+import akka.cluster.Member;
+import com.joborchestratorai.akkajoborchestratorai.services.ClusteredResumeSearchService;
+import com.joborchestratorai.akkajoborchestratorai.services.EventSourcingService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import scala.jdk.CollectionConverters;
+
+@RestController
+@RequestMapping("/health")
+@Profile({"node1", "node2", "node3", "node4", "clustered"})
+public class HealthController {
+
+    private static final Logger logger = LoggerFactory.getLogger(HealthController.class);
+
+    @Autowired
+    private ActorSystem<?> actorSystem;
+    
+    @Autowired
+    private ClusteredResumeSearchService clusteredService;
+    
+    @Autowired
+    private EventSourcingService eventSourcingService;
+    
+    private final long startTime = System.currentTimeMillis();
+
+    @GetMapping("/status")
+    public ResponseEntity<Map<String, Object>> getHealthStatus() {
+        try {
+            Map<String, Object> health = new HashMap<>();
+            
+            // Basic application health
+            health.put("status", "UP");
+            health.put("timestamp", Instant.now().toString());
+            health.put("uptime", System.currentTimeMillis() - startTime);
+            
+            // Actor system health
+            Map<String, Object> actorSystemHealth = new HashMap<>();
+            actorSystemHealth.put("name", actorSystem.name());
+            actorSystemHealth.put("running", !actorSystem.whenTerminated().value().isDefined());
+            health.put("actorSystem", actorSystemHealth);
+            
+            // Cluster health
+            try {
+                Cluster cluster = Cluster.get(actorSystem);
+                Map<String, Object> clusterHealth = getClusterHealth(cluster);
+                health.put("cluster", clusterHealth);
+            } catch (Exception e) {
+                logger.warn("Failed to get cluster health: {}", e.getMessage());
+                health.put("cluster", Map.of("status", "ERROR", "message", e.getMessage()));
+            }
+            
+            // Service health checks
+            Map<String, Object> services = new HashMap<>();
+            services.put("clusteredSearchService", checkServiceHealth(clusteredService));
+            services.put("eventSourcingService", checkServiceHealth(eventSourcingService));
+            health.put("services", services);
+            
+            return ResponseEntity.ok(health);
+            
+        } catch (Exception e) {
+            logger.error("Health check failed: {}", e.getMessage());
+            return ResponseEntity.status(500).body(Map.of(
+                "status", "DOWN",
+                "error", e.getMessage(),
+                "timestamp", Instant.now().toString()
+            ));
+        }
+    }
+
+    @GetMapping("/cluster")
+    public ResponseEntity<Map<String, Object>> getClusterStatus() {
+        try {
+            Cluster cluster = Cluster.get(actorSystem);
+            Map<String, Object> clusterInfo = new HashMap<>();
+            
+            // Cluster overview
+            clusterInfo.put("selfAddress", cluster.selfAddress().toString());
+            clusterInfo.put("selfRoles", scala.jdk.CollectionConverters.SetHasAsJava(cluster.selfRoles()).asJava());
+            clusterInfo.put("isLeader", cluster.state().getLeader().isDefined() && 
+                           cluster.state().getLeader().get().equals(cluster.selfMember().address()));
+            clusterInfo.put("leader", cluster.state().getLeader().isDefined() ? 
+                           cluster.state().getLeader().get().toString() : "none");
+            
+            // Member information
+            List<Map<String, Object>> members = CollectionConverters.SetHasAsJava(cluster.state().getMembers()).asJava().stream()
+                .map(this::memberToMap)
+                .collect(Collectors.toList());
+            clusterInfo.put("members", members);
+            clusterInfo.put("memberCount", members.size());
+            
+            // Unreachable members
+            List<Map<String, Object>> unreachable = CollectionConverters.SetHasAsJava(cluster.state().getUnreachable()).asJava().stream()
+                .map(this::memberToMap)
+                .collect(Collectors.toList());
+            clusterInfo.put("unreachableMembers", unreachable);
+            
+            // Cluster convergence
+            clusterInfo.put("convergence", Map.of(
+                "seenByCount", CollectionConverters.SetHasAsJava(cluster.state().seenBy()).asJava().size()
+            ));
+            
+            return ResponseEntity.ok(clusterInfo);
+            
+        } catch (Exception e) {
+            logger.error("Failed to get cluster status: {}", e.getMessage());
+            return ResponseEntity.status(500).body(Map.of(
+                "error", "Failed to retrieve cluster status: " + e.getMessage(),
+                "timestamp", Instant.now().toString()
+            ));
+        }
+    }
+
+    @GetMapping("/metrics")
+    public ResponseEntity<Map<String, Object>> getMetrics() {
+        try {
+            Map<String, Object> metrics = new HashMap<>();
+            
+            // JVM metrics
+            Runtime runtime = Runtime.getRuntime();
+            Map<String, Object> jvm = new HashMap<>();
+            jvm.put("totalMemory", runtime.totalMemory());
+            jvm.put("freeMemory", runtime.freeMemory());
+            jvm.put("usedMemory", runtime.totalMemory() - runtime.freeMemory());
+            jvm.put("maxMemory", runtime.maxMemory());
+            jvm.put("processors", runtime.availableProcessors());
+            metrics.put("jvm", jvm);
+            
+            // Application metrics
+            Map<String, Object> app = new HashMap<>();
+            app.put("uptime", System.currentTimeMillis() - startTime);
+            app.put("timestamp", Instant.now().toString());
+            metrics.put("application", app);
+            
+            // Cluster metrics
+            try {
+                Cluster cluster = Cluster.get(actorSystem);
+                Map<String, Object> clusterMetrics = new HashMap<>();
+                clusterMetrics.put("memberCount", CollectionConverters.SetHasAsJava(cluster.state().getMembers()).asJava().size());
+                clusterMetrics.put("unreachableCount", CollectionConverters.SetHasAsJava(cluster.state().getUnreachable()).asJava().size());
+                clusterMetrics.put("isLeader", cluster.state().getLeader().isDefined() && 
+                                 cluster.state().getLeader().get().equals(cluster.selfMember().address()));
+                metrics.put("cluster", clusterMetrics);
+            } catch (Exception e) {
+                metrics.put("cluster", Map.of("error", e.getMessage()));
+            }
+            
+            return ResponseEntity.ok(metrics);
+            
+        } catch (Exception e) {
+            logger.error("Failed to get metrics: {}", e.getMessage());
+            return ResponseEntity.status(500).body(Map.of(
+                "error", "Failed to retrieve metrics: " + e.getMessage()
+            ));
+        }
+    }
+
+    @GetMapping("/readiness")
+    public ResponseEntity<Map<String, Object>> getReadinessProbe() {
+        try {
+            Map<String, Object> readiness = new HashMap<>();
+            boolean ready = true;
+            List<String> checks = new ArrayList<>();
+            
+            // Check actor system
+            if (actorSystem.whenTerminated().value().isDefined()) {
+                ready = false;
+                checks.add("ActorSystem is terminated");
+            }
+            
+            // Check cluster membership (if in cluster mode)
+            try {
+                Cluster cluster = Cluster.get(actorSystem);
+                if (CollectionConverters.SetHasAsJava(cluster.state().getMembers()).asJava().isEmpty()) {
+                    ready = false;
+                    checks.add("No cluster members found");
+                }
+                if (!CollectionConverters.SetHasAsJava(cluster.state().getUnreachable()).asJava().isEmpty()) {
+                    checks.add("Some cluster members are unreachable");
+                }
+            } catch (Exception e) {
+                // Not in cluster mode, that's ok
+                logger.debug("Not running in cluster mode: {}", e.getMessage());
+            }
+            
+            readiness.put("ready", ready);
+            readiness.put("checks", checks);
+            readiness.put("timestamp", Instant.now().toString());
+            
+            if (ready) {
+                return ResponseEntity.ok(readiness);
+            } else {
+                return ResponseEntity.status(503).body(readiness);
+            }
+            
+        } catch (Exception e) {
+            logger.error("Readiness probe failed: {}", e.getMessage());
+            return ResponseEntity.status(503).body(Map.of(
+                "ready", false,
+                "error", e.getMessage(),
+                "timestamp", Instant.now().toString()
+            ));
+        }
+    }
+
+    @GetMapping("/liveness")
+    public ResponseEntity<Map<String, Object>> getLivenessProbe() {
+        try {
+            Map<String, Object> liveness = new HashMap<>();
+            boolean alive = true;
+            
+            // Basic liveness check - if we can respond, we're alive
+            // Check if actor system is still running
+            if (actorSystem.whenTerminated().value().isDefined()) {
+                alive = false;
+            }
+            
+            liveness.put("alive", alive);
+            liveness.put("timestamp", Instant.now().toString());
+            liveness.put("uptime", System.currentTimeMillis() - startTime);
+            
+            if (alive) {
+                return ResponseEntity.ok(liveness);
+            } else {
+                return ResponseEntity.status(500).body(liveness);
+            }
+            
+        } catch (Exception e) {
+            logger.error("Liveness probe failed: {}", e.getMessage());
+            return ResponseEntity.status(500).body(Map.of(
+                "alive", false,
+                "error", e.getMessage(),
+                "timestamp", Instant.now().toString()
+            ));
+        }
+    }
+
+    private Map<String, Object> getClusterHealth(Cluster cluster) {
+        Map<String, Object> clusterHealth = new HashMap<>();
+        
+        try {
+            clusterHealth.put("status", "UP");
+            clusterHealth.put("selfAddress", cluster.selfAddress().toString());
+            clusterHealth.put("memberCount", CollectionConverters.SetHasAsJava(cluster.state().getMembers()).asJava().size());
+            clusterHealth.put("unreachableCount", CollectionConverters.SetHasAsJava(cluster.state().getUnreachable()).asJava().size());
+            clusterHealth.put("isLeader", cluster.state().getLeader().isDefined() && 
+                             cluster.state().getLeader().get().equals(cluster.selfMember().address()));
+            
+            // Health assessment
+            int totalMembers = CollectionConverters.SetHasAsJava(cluster.state().getMembers()).asJava().size();
+            int unreachableMembers = CollectionConverters.SetHasAsJava(cluster.state().getUnreachable()).asJava().size();
+            
+            if (unreachableMembers > 0) {
+                clusterHealth.put("status", "DEGRADED");
+                clusterHealth.put("warning", unreachableMembers + " unreachable members");
+            }
+            
+            if (totalMembers == 0) {
+                clusterHealth.put("status", "DOWN");
+                clusterHealth.put("error", "No cluster members");
+            }
+            
+        } catch (Exception e) {
+            clusterHealth.put("status", "ERROR");
+            clusterHealth.put("error", e.getMessage());
+        }
+        
+        return clusterHealth;
+    }
+
+    private Map<String, Object> memberToMap(Member member) {
+        Map<String, Object> memberMap = new HashMap<>();
+        memberMap.put("address", member.address().toString());
+        memberMap.put("status", member.status().toString());
+        memberMap.put("roles", CollectionConverters.SetHasAsJava(member.getRoles()).asJava());
+        memberMap.put("upNumber", member.upNumber());
+        return memberMap;
+    }
+
+    private Map<String, Object> checkServiceHealth(Object service) {
+        Map<String, Object> serviceHealth = new HashMap<>();
+        try {
+            if (service != null) {
+                serviceHealth.put("status", "UP");
+                serviceHealth.put("class", service.getClass().getSimpleName());
+            } else {
+                serviceHealth.put("status", "DOWN");
+                serviceHealth.put("error", "Service is null");
+            }
+        } catch (Exception e) {
+            serviceHealth.put("status", "ERROR");
+            serviceHealth.put("error", e.getMessage());
+        }
+        return serviceHealth;
+    }
+}

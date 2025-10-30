@@ -77,7 +77,8 @@ public class LocalStorageService {
             return null;
         }
 
-        File[] files = dir.listFiles((d, name) -> name.endsWith(".json"));
+        // Only consider primary resume snapshots, ignore helper files like latest_rows.json
+        File[] files = dir.listFiles((d, name) -> name.endsWith(".json") && name.startsWith("resume_"));
 
         if (files == null || files.length == 0) {
             System.out.println("No resume data files found in: " + getStoragePath());
@@ -180,5 +181,47 @@ public class LocalStorageService {
         }
 
         return objectMapper.readValue(file, ResumeData.class);
+    }
+
+    // Base Resume (PDF text) helpers
+    public void saveBaseResumeText(String text) throws IOException {
+        Path storageDir = Paths.get(getStoragePath());
+        if (!Files.exists(storageDir)) {
+            Files.createDirectories(storageDir);
+        }
+        Path path = storageDir.resolve("base_resume.txt");
+        Files.writeString(path, text == null ? "" : text);
+        System.out.println("Base resume text stored at: " + path);
+    }
+
+    public String getBaseResumeText() throws IOException {
+        Path path = Paths.get(getStoragePath()).resolve("base_resume.txt");
+        File f = path.toFile();
+        if (!f.exists()) {
+            System.out.println("Base resume text not found at: " + path);
+            return null;
+        }
+        return Files.readString(path);
+    }
+
+    // Per-row resume data (bullet + tags)
+    public void saveLatestResumeRows(java.util.List<com.joborchestratorai.akkajoborchestratorai.models.ResumeRow> rows) throws IOException {
+        Path storageDir = Paths.get(getStoragePath());
+        if (!Files.exists(storageDir)) {
+            Files.createDirectories(storageDir);
+        }
+        Path path = storageDir.resolve("latest_rows.json");
+        objectMapper.writeValue(path.toFile(), rows);
+    }
+
+    public java.util.List<com.joborchestratorai.akkajoborchestratorai.models.ResumeRow> getLatestResumeRows() throws IOException {
+        Path path = Paths.get(getStoragePath()).resolve("latest_rows.json");
+        File f = path.toFile();
+        if (!f.exists()) {
+            return java.util.Collections.emptyList();
+        }
+        com.fasterxml.jackson.core.type.TypeReference<java.util.List<com.joborchestratorai.akkajoborchestratorai.models.ResumeRow>> typeRef =
+                new com.fasterxml.jackson.core.type.TypeReference<>() {};
+        return objectMapper.readValue(f, typeRef);
     }
 }

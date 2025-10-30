@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <title>AI Resume Generator & Employee Finder</title>
@@ -534,62 +534,92 @@
                             </button>
                         </div>
                     </div>
+                    <div class="row g-3 mt-2">
+                        <div class="col-md-9">
+                            <label for="baseResumeFile" class="form-label fw-bold">Optional: Upload Base Resume (PDF)</label>
+                            <input type="file" class="form-control" id="baseResumeFile" accept=".pdf">
+                            <div class="form-text">Used in Step 3 to suggest minimal ATS-focused changes</div>
+                        </div>
+                    </div>
                 </form>
                 <div id="uploadMessage" class="mt-3"></div>
             </div>
         </div>
 
-        <!-- Step 2: Job URL Input -->
-        <div class="glass-card" id="urlCard">
+                <!-- Step 2: Paste Job Description -->
+        <div class="glass-card" id="pasteCard">
             <div class="card-header">
-                <h3><i class="bi bi-link-45deg me-2"></i>Step 2: Enter Job Posting URL</h3>
+                <h3><i class="bi bi-clipboard-check me-2"></i>Step 2: Paste Job Description</h3>
             </div>
             <div class="card-body p-4">
-                <form id="scrapeForm">
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-9">
-                            <label for="jobUrl" class="form-label fw-bold">Job Posting URL</label>
-                            <input type="url" class="form-control" id="jobUrl"
-                                   placeholder="https://example.com/jobs/123" required>
-                            <div class="form-text">Paste the full URL of the job posting - employees will be found automatically</div>
-                        </div>
-                        <div class="col-md-3">
-                            <button type="submit" class="btn btn-primary w-100">
-                                <span id="scrapeButtonText"><i class="bi bi-download me-1"></i>Analyze Job</span>
-                                <span id="scrapeSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
-                            </button>
-                        </div>
+                <form id="scrapeForm"> 
+                    <div class="mb-3">
+                        <label for="jobText" class="form-label fw-bold">Job Description Text</label>
+                        <textarea class="form-control" id="jobText" rows="8" placeholder="Paste the full job description here" required></textarea>
+                        <div class="form-text">Copy and paste the job description text. This will be used to tailor your resume.</div>
                     </div>
+                    <div class="text-end"> 
+                        <button type="button" id="useDescriptionButton" class="btn btn-primary"> 
+                            <span id="scrapeButtonText"><i class="bi bi-check2-circle me-1"></i>Use Description</span> 
+                            <span id="scrapeSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span> 
+                        </button> 
+                    </div> 
                 </form>
 
-                <div class="loading" id="loadingIndicator">
+                <div class="loading" id="loadingIndicator" style="display:none;">
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Loading...</span>
                     </div>
-                    <p class="mt-3 h5">Analyzing job posting and finding employees...</p>
+                    <p class="mt-3 h5">Processing your description...</p>
                 </div>
 
                 <div id="scrapeMessage" class="mt-3"></div>
             </div>
         </div>
 
-        <!-- Step 3: Job Description Display -->
+        <!-- Step 3: Matched Experiences -->
         <div class="glass-card" id="jobCard">
             <div class="card-header">
-                <h3><i class="bi bi-file-earmark-text me-2"></i>Step 3: Job Description</h3>
+                <h3><i class="bi bi-list-check me-2"></i>Step 3: Matched Experiences</h3>
             </div>
             <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <label class="form-label fw-bold mb-0">Extracted Job Description:</label>
-                    <button id="copyJobButton" class="btn btn-sm btn-outline-secondary d-none"
-                            onclick="copyJobDescription()" title="Copy to clipboard">
-                        <i class="bi bi-clipboard"></i> Copy
-                    </button>
+                    <label class="form-label fw-bold mb-0">Top Matching Bullets:</label>
+                    <div class="d-flex align-items-center gap-2">
+                        <span id="matchingTime" class="badge bg-light text-dark d-none" title="Response time">⏱️ 0.0s</span>
+                        <button id="copyJobButton" class="btn btn-sm btn-outline-secondary d-none"
+                                onclick="copyJobDescription()" title="Copy to clipboard">
+                            <i class="bi bi-clipboard"></i> Copy
+                        </button>
+                    </div>
                 </div>
                 <div id="jobDescription" class="job-description-box">
                     <div class="placeholder-content">
-                        <i class="bi bi-file-earmark-text placeholder-icon"></i>
-                        <p class="mb-0">The scraped job description will appear here</p>
+                        <i class="bi bi-list-check placeholder-icon"></i>
+                        <p class="mb-0">Matched experiences will appear here</p>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <label class="form-label fw-bold mb-0">Suggested Resume Changes:</label>
+                            <div class="btn-group btn-group-sm ms-3" role="group" aria-label="Mode toggle">
+                                <button type="button" id="optBasicBtn" class="btn btn-outline-primary active">Basic</button>
+                                <button type="button" id="optAdvancedBtn" class="btn btn-outline-primary">Advanced</button>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <span id="optimizeTime" class="badge bg-light text-dark d-none" title="Response time">⏱️ 0.0s</span>
+                            <button id="copyChangesButton" class="btn btn-sm btn-outline-secondary d-none" title="Copy to clipboard">
+                                <i class="bi bi-clipboard"></i> Copy
+                            </button>
+                        </div>
+                    </div>
+                    <div id="resumeChanges" class="job-description-box">
+                        <div class="placeholder-content">
+                            <i class="bi bi-magic placeholder-icon"></i>
+                            <p class="mb-0">ATS-focused changes will appear here</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -601,6 +631,18 @@
                 <h3><i class="bi bi-people me-2"></i>Step 4: Company Employees</h3>
             </div>
             <div class="card-body p-4">
+                <div class="row g-2 align-items-end mb-3">
+                    <div class="col-md-8">
+                        <label for="companyInput" class="form-label fw-bold mb-1">Company Name (optional)</label>
+                        <input type="text" id="companyInput" class="form-control" placeholder="e.g., Google, Acme Corp">
+                        <div class="form-text">If we can’t detect the company from the description, enter it here to find recruiters.</div>
+                    </div>
+                    <div class="col-md-4 text-md-end">
+                        <button type="button" id="findEmployeesButton" class="btn btn-outline-primary w-100">
+                            <i class="bi bi-search me-1"></i> Find Employees
+                        </button>
+                    </div>
+                </div>
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <label class="form-label fw-bold mb-0">Found Employees:</label>
                     <div id="employeeStats" class="text-muted small d-none"></div>
@@ -612,6 +654,11 @@
                     </div>
                 </div>
                 <div id="employeeMessage" class="mt-3"></div>
+                <div class="mt-3 text-end">
+                    <a href="/bulk-email" target="_blank" class="btn btn-outline-primary">
+                        <i class="bi bi-envelope me-1"></i> Bulk Email
+                    </a>
+                </div>
             </div>
         </div>
 
@@ -662,6 +709,7 @@
 </div>
 
 <script>
+    console.log('JavaScript is loading...');
     let jobDescriptionData = null;
     let resumeUploaded = false;
     let companyName = '';
@@ -743,13 +791,51 @@
         }
     }
 
+    // Heuristic extraction of company name from pasted JD
+    function extractCompanyFromText(text) {
+        try {
+            // 1) Look for explicit labels like "Company: Foo"
+            const labelMatch = text.match(/^(?:\s)*(?:Company|Employer)\s*:\s*(.+)$/im);
+            if (labelMatch && labelMatch[1]) {
+                return labelMatch[1].trim().replace(/[\s]*\.*$/, '');
+            }
+
+            // 2) Look for patterns like "Role at Foo" near the top
+            const head = text.slice(0, 600);
+            const atMatch = head.match(/\b(?:at|@)\s+([A-Z][A-Za-z0-9&\-\s]{2,})/);
+            if (atMatch && atMatch[1]) {
+                return atMatch[1].trim();
+            }
+
+            // 3) If markdown-like heading includes a company
+            const headingMatch = head.match(/^#+\s+(.+?)\s+-\s+(.+)$/m);
+            if (headingMatch && headingMatch[2]) {
+                return headingMatch[2].trim();
+            }
+
+            return '';
+        } catch (e) {
+            return '';
+        }
+    }
+
     // Resume upload form handler
     document.getElementById('uploadForm').addEventListener('submit', async (e) => {
         e.preventDefault();
+        console.log('Upload form submitted', e);
 
         const fileInput = document.getElementById('resumeFile');
+        if (!fileInput.files || !fileInput.files[0]) {
+            alert('Please select a file to upload');
+            return;
+        }
+        
         const formData = new FormData();
         formData.append('file', fileInput.files[0]);
+        const baseResumeInput = document.getElementById('baseResumeFile');
+        if (baseResumeInput && baseResumeInput.files && baseResumeInput.files[0]) {
+            formData.append('baseResume', baseResumeInput.files[0]);
+        }
 
         const buttonText = document.getElementById('uploadButtonText');
         const buttonSpinner = document.getElementById('uploadSpinner');
@@ -760,20 +846,39 @@
         uploadMessage.innerHTML = '';
 
         try {
-            // Simulate upload for demo
-            await new Promise(resolve => setTimeout(resolve, 1500));
-
-            uploadMessage.innerHTML = `
+            // Upload to backend and log detected tags
+            const res = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            });
+            if (!res.ok) {
+                throw new Error(`Upload failed with status ${res.status}`);
+            }
+            const data = await res.json();
+            if (Array.isArray(data.detectedTags)) {
+                console.log('Detected Tags:', data.detectedTags);
+                try { localStorage.setItem('detectedTags', JSON.stringify(data.detectedTags)); } catch(_) {}
+                // Optional: show a small preview under the upload card
+                uploadMessage.innerHTML = `
+                <div class="alert alert-success">
+                    <i class="bi bi-check-circle-fill me-2"></i>
+                    Resume uploaded successfully!
+                </div>
+                <div class="mt-2 small"><strong>Detected Tags (${data.detectedTags.length}):</strong> ${data.detectedTags.join(', ')}</div>`;
+            } else {
+                console.log('No detected tags found in the uploaded file.');
+                uploadMessage.innerHTML = `
                 <div class="alert alert-success">
                     <i class="bi bi-check-circle-fill me-2"></i>
                     Resume uploaded successfully!
                 </div>`;
+            }
 
             resumeUploaded = true;
             updateStep(2);
 
             setTimeout(() => {
-                document.getElementById('urlCard').scrollIntoView({
+                document.getElementById('pasteCard').scrollIntoView({
                     behavior: 'smooth',
                     block: 'start'
                 });
@@ -791,16 +896,15 @@
         }
     });
 
-    // Job scraping form handler
-    document.getElementById('scrapeForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
+    // Job description paste handler (button-based to avoid form submits)
+    document.getElementById('useDescriptionButton').addEventListener('click', async (e) => {
 
         if (!resumeUploaded) {
             alert('Please upload your resume first!');
             return;
         }
 
-        const url = document.getElementById('jobUrl').value.trim();
+        const jobText = document.getElementById('jobText').value.trim();
         const responseBox = document.getElementById('jobDescription');
         const loadingIndicator = document.getElementById('loadingIndicator');
         const buttonText = document.getElementById('scrapeButtonText');
@@ -809,74 +913,299 @@
         const generateButton = document.getElementById('generateButton');
         const scrapeMessage = document.getElementById('scrapeMessage');
 
-        // Extract company name from URL
-        companyName = extractCompanyFromUrl(url);
-        console.log('Extracted company name:', companyName);
+        // Try to extract company name from pasted text; fall back to manual input
+        companyName = extractCompanyFromText(jobText) || '';
+        console.log('Company name (detected/optional):', companyName);
 
         // Show loading state
         loadingIndicator.style.display = 'block';
         responseBox.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>';
-        buttonText.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Analyzing...';
+        buttonText.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Processing...';
         buttonSpinner.classList.remove('d-none');
         copyJobButton.classList.add('d-none');
         generateButton.disabled = true;
         scrapeMessage.innerHTML = '';
 
         try {
-            // Simulate job scraping
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // Save the pasted text
+            jobDescriptionData = jobText;
 
-            // Mock job description
-            const mockJobDescription = `
-<h4>Software Engineer - Full Stack</h4>
-<p><strong>Company:</strong> ${companyName}</p>
-<p><strong>Location:</strong> San Francisco, CA</p>
+            // Read detected tags from localStorage
+            let detectedTags = [];
+            try {
+                const saved = localStorage.getItem('detectedTags');
+                if (saved) detectedTags = JSON.parse(saved);
+            } catch (_) {}
 
-<h5>Job Description:</h5>
-<p>We are seeking a talented Full Stack Software Engineer to join our growing engineering team. You will be responsible for developing scalable web applications and contributing to our platform architecture.</p>
+            // Show initial loading states
+            responseBox.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-3">Finding matching experiences...</p></div>';
+            const changesBox = document.getElementById('resumeChanges');
+            if (changesBox) {
+                changesBox.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-3">Generating optimization suggestions...</p></div>';
+            }
 
-<h5>Key Responsibilities:</h5>
-<ul>
-<li>Design and implement robust, scalable web applications</li>
-<li>Collaborate with cross-functional teams to define and ship new features</li>
-<li>Write clean, maintainable, and well-tested code</li>
-<li>Participate in code reviews and technical discussions</li>
-<li>Optimize application performance and user experience</li>
-</ul>
+            // Start timers
+            const matchStartTime = performance.now();
+            const optimizeStartTime = performance.now();
 
-<h5>Required Qualifications:</h5>
-<ul>
-<li>3+ years of experience in full-stack development</li>
-<li>Proficiency in JavaScript/TypeScript, React, Node.js</li>
-<li>Experience with databases (SQL and NoSQL)</li>
-<li>Familiarity with cloud platforms (AWS, GCP, or Azure)</li>
-<li>Strong problem-solving and communication skills</li>
-</ul>
+            // Function to handle real-time streaming with SSE
+            async function handleRealTimeStreaming(jobText, detectedTags, responseBox, changesBox, 
+                copyJobButton, generateButton, matchStartTime, optimizeStartTime) {
+                
+                return new Promise((resolve, reject) => {
+                    let matchContent = '';
+                    let basicContent = '';
+                    let advancedContent = '';
+                    let currentMode = 'basic';
+                    let matchCompleted = false;
+                    let optimizeCompleted = false;
+                    
+                    // Setup response boxes for streaming
+                    responseBox.innerHTML = '<pre class="mb-0" style="white-space: pre-wrap; word-wrap: break-word;"></pre>';
+                    changesBox.innerHTML = '<pre class="mb-0" style="white-space: pre-wrap; word-wrap: break-word;"></pre>';
+                    const matchPre = responseBox.querySelector('pre');
+                    const optimizePre = changesBox.querySelector('pre');
+                    
+                    try {
+                        // Start SSE for optimization (this includes both basic and advanced)
+                        const optimizeSSE = new EventSource('/api/optimize-resume-stream?' + 
+                            new URLSearchParams({
+                                jobDescription: jobText,
+                                pointsToAdd: ''
+                            }));
+                        
+                        optimizeSSE.addEventListener('basic-start', () => {
+                            basicContent = '';
+                            if (currentMode === 'basic') optimizePre.textContent = '';
+                        });
+                        
+                        optimizeSSE.addEventListener('basic-token', (event) => {
+                            basicContent += event.data;
+                            if (currentMode === 'basic') optimizePre.textContent = basicContent;
+                        });
+                        
+                        optimizeSSE.addEventListener('advanced-start', () => {
+                            advancedContent = '';
+                            if (currentMode === 'advanced') optimizePre.textContent = '';
+                        });
+                        
+                        optimizeSSE.addEventListener('advanced-token', (event) => {
+                            advancedContent += event.data;
+                            if (currentMode === 'advanced') optimizePre.textContent = advancedContent;
+                        });
+                        
+                        optimizeSSE.addEventListener('complete', () => {
+                            const optimizeEndTime = performance.now();
+                            const optimizeDuration = ((optimizeEndTime - optimizeStartTime) / 1000).toFixed(1);
+                            const timeElement = document.getElementById('optimizeTime');
+                            if (timeElement) {
+                                timeElement.textContent = `⏱️ ${optimizeDuration}s`;
+                                timeElement.classList.remove('d-none');
+                            }
+                            
+                            // Setup mode switching
+                            const basicBtn = document.getElementById('optBasicBtn');
+                            const advBtn = document.getElementById('optAdvancedBtn');
+                            if (basicBtn && advBtn) {
+                                basicBtn.onclick = () => { 
+                                    currentMode = 'basic'; 
+                                    basicBtn.classList.add('active'); 
+                                    advBtn.classList.remove('active'); 
+                                    optimizePre.textContent = basicContent;
+                                };
+                                advBtn.onclick = () => { 
+                                    currentMode = 'advanced'; 
+                                    advBtn.classList.add('active'); 
+                                    basicBtn.classList.remove('active'); 
+                                    optimizePre.textContent = advancedContent;
+                                };
+                            }
+                            
+                            const cbtn = document.getElementById('copyChangesButton');
+                            if (cbtn) {
+                                cbtn.classList.remove('d-none');
+                                cbtn.onclick = function(){ 
+                                    const n = document.querySelector('#resumeChanges pre'); 
+                                    if(n){ navigator.clipboard.writeText(n.textContent);} 
+                                };
+                            }
+                            
+                            optimizeSSE.close();
+                            optimizeCompleted = true;
+                            if (matchCompleted) resolve();
+                        });
+                        
+                        optimizeSSE.addEventListener('error', () => {
+                            console.log('Optimize SSE failed, falling back to regular API');
+                            optimizeSSE.close();
+                            optimizeCompleted = true;
+                            if (matchCompleted) resolve();
+                        });
+                        
+                        // For match experiences, use regular API for now (SSE endpoint needs GET support)
+                        fetch('/api/match-experiences', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ jobDescription: jobText, tags: detectedTags })
+                        })
+                        .then(res => res.json())
+                        .then(data => {
+                            const matchEndTime = performance.now();
+                            const matchDuration = ((matchEndTime - matchStartTime) / 1000).toFixed(1);
+                            
+                            matchContent = (data && data.matches) ? data.matches : '';
+                            matchPre.textContent = matchContent;
+                            
+                            copyJobButton.classList.remove('d-none');
+                            generateButton.disabled = false;
+                            
+                            const timeElement = document.getElementById('matchingTime');
+                            if (timeElement) {
+                                timeElement.textContent = `⏱️ ${matchDuration}s`;
+                                timeElement.classList.remove('d-none');
+                            }
+                            
+                            matchCompleted = true;
+                            if (optimizeCompleted) resolve();
+                        })
+                        .catch(error => {
+                            console.error('Match API failed:', error);
+                            matchCompleted = true;
+                            if (optimizeCompleted) resolve();
+                        });
+                        
+                    } catch (error) {
+                        console.error('SSE streaming failed:', error);
+                        reject(error);
+                    }
+                });
+            }
+            
+            // Start real-time streaming for both operations
+            
+            // Use real-time streaming
+            try {
+                await handleRealTimeStreaming(jobText, detectedTags, responseBox, changesBox, 
+                    copyJobButton, generateButton, matchStartTime, optimizeStartTime);
+            } catch (streamingError) {
+                console.log('Streaming failed, falling back to regular API:', streamingError);
+                
+                // Fallback: Start both API calls in parallel for maximum speed
+                const matchPromise = fetch('/api/match-experiences', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ jobDescription: jobText, tags: detectedTags })
+                });
 
-<h5>Preferred Qualifications:</h5>
-<ul>
-<li>Experience with modern frameworks (Next.js, Express.js)</li>
-<li>Knowledge of containerization (Docker, Kubernetes)</li>
-<li>Understanding of microservices architecture</li>
-<li>Experience with CI/CD pipelines</li>
-</ul>`;
+                const optimizePromise = fetch('/api/optimize-resume', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ jobDescription: jobText, pointsToAdd: '' })
+                });
 
-            jobDescriptionData = mockJobDescription;
-            responseBox.innerHTML = `<div class="job-description-content">${mockJobDescription}</div>`;
-            copyJobButton.classList.remove('d-none');
-            generateButton.disabled = false;
+                // Function to simulate real-time streaming text effect for fallback
+                function streamText(element, text, onComplete) {
+                    element.innerHTML = '<pre class="mb-0" style="white-space: pre-wrap; word-wrap: break-word;"></pre>';
+                    const pre = element.querySelector('pre');
+                    const words = text.split(' ');
+                    let currentIndex = 0;
+                    
+                    function addNextWord() {
+                        if (currentIndex < words.length) {
+                            const currentText = words.slice(0, currentIndex + 1).join(' ');
+                            pre.textContent = currentText;
+                            currentIndex++;
+                            setTimeout(addNextWord, 8); // 8ms delay for fast ChatGPT-like streaming
+                        } else if (onComplete) {
+                            onComplete();
+                        }
+                    }
+                    addNextWord();
+                }
+
+                // Wait for match results first (needed for UI)
+                const matchRes = await matchPromise;
+                const matchEndTime = performance.now();
+                const matchDuration = ((matchEndTime - matchStartTime) / 1000).toFixed(1);
+                
+                if (!matchRes.ok) {
+                    throw new Error(`Matching failed with status ${matchRes.status}`);
+                }
+                const matchData = await matchRes.json();
+                const matchesText = (matchData && matchData.matches) ? matchData.matches : '';
+                
+                // Update Step 3 with streaming effect and timing
+                streamText(responseBox, matchesText, () => {
+                    copyJobButton.classList.remove('d-none');
+                    generateButton.disabled = false;
+                    // Show timing
+                    const timeElement = document.getElementById('matchingTime');
+                    if (timeElement) {
+                        timeElement.textContent = `⏱️ ${matchDuration}s`;
+                        timeElement.classList.remove('d-none');
+                    }
+                });
+
+                // Wait for optimization results
+                const respBoth = await optimizePromise;
+                const optimizeEndTime = performance.now();
+                const optimizeDuration = ((optimizeEndTime - optimizeStartTime) / 1000).toFixed(1);
+                
+                if (respBoth.ok) {
+                    const data = await respBoth.json();
+                    const basicText = data?.basicChanges || '';
+                    const advText = data?.advancedChanges || '';
+                    
+                    let currentMode = 'basic';
+                    function renderDual() {
+                        const content = currentMode === 'advanced' ? advText : basicText;
+                        streamText(changesBox, content, () => {
+                            // Show timing
+                            const timeElement = document.getElementById('optimizeTime');
+                            if (timeElement) {
+                                timeElement.textContent = `⏱️ ${optimizeDuration}s`;
+                                timeElement.classList.remove('d-none');
+                            }
+                        });
+                    }
+                    renderDual();
+                    
+                    const basicBtn = document.getElementById('optBasicBtn');
+                    const advBtn = document.getElementById('optAdvancedBtn');
+                    if (basicBtn && advBtn) {
+                        basicBtn.onclick = () => { currentMode = 'basic'; basicBtn.classList.add('active'); advBtn.classList.remove('active'); renderDual(); };
+                        advBtn.onclick = () => { currentMode = 'advanced'; advBtn.classList.add('active'); basicBtn.classList.remove('active'); renderDual(); };
+                    }
+                    const cbtn = document.getElementById('copyChangesButton');
+                    if (cbtn) {
+                        cbtn.classList.remove('d-none');
+                        cbtn.onclick = function(){ const n=document.querySelector('#resumeChanges pre'); if(n){ navigator.clipboard.writeText(n.textContent);} };
+                    }
+                } else {
+                    changesBox.innerHTML = '<div class="alert alert-warning">Optimization failed. Please try again.</div>';
+                    // Show timing even on failure
+                    const timeElement = document.getElementById('optimizeTime');
+                    if (timeElement) {
+                        timeElement.textContent = `⏱️ ${optimizeDuration}s (failed)`;
+                        timeElement.classList.remove('d-none');
+                    }
+                }
+            }
 
             scrapeMessage.innerHTML = `
-                <div class="alert alert-success">
-                    <i class="bi bi-check-circle-fill me-2"></i>
-                    Job description successfully extracted! Now searching for employees...
+                <div class=\"alert alert-success\"> 
+                    <i class=\"bi bi-check-circle-fill me-2\"></i>
+                    Matches generated! Suggested resume changes are ready.
                 </div>`;
 
             updateStep(3);
 
-            // Automatically search for employees
+            // Automatically search for employees if company detected
             if (companyName) {
                 await searchEmployees(companyName);
+                // Fill the input for visibility
+                const ci = document.getElementById('companyInput');
+                if (ci && !ci.value) ci.value = companyName;
             }
 
             setTimeout(() => {
@@ -891,17 +1220,17 @@
             responseBox.innerHTML = `
                 <div class="alert alert-danger mb-0">
                     <i class="bi bi-x-circle-fill me-2"></i>
-                    <strong>Error:</strong> Failed to scrape job description. Please check the URL and try again.
+                    <strong>Error:</strong> Please paste a valid job description and try again.
                 </div>`;
 
             scrapeMessage.innerHTML = `
                 <div class="alert alert-danger">
                     <i class="bi bi-x-circle-fill me-2"></i>
-                    <strong>Scraping failed:</strong> Please check the URL and try again.
+                    <strong>Failed:</strong> Please paste a valid job description and try again.
                 </div>`;
         } finally {
             loadingIndicator.style.display = 'none';
-            buttonText.innerHTML = '<i class="bi bi-download me-1"></i>Analyze Job';
+            buttonText.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Use Description';
             buttonSpinner.classList.add('d-none');
         }
     });
@@ -914,70 +1243,86 @@
 
         try {
             employeeResults.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-3">Searching for employees...</p></div>';
+            employeeMessage.innerHTML = '';
+            employeeStats.classList.add('d-none');
 
-            // Simulate employee search
-            await new Promise(resolve => setTimeout(resolve, 2500));
+            // Create a search query for recruiters at the company
+            const searchQuery = `site:linkedin.com/in ("recruiter" OR "talent acquisition" OR "hiring") AND "${company}"`;
+            
+            // Call the backend API
+            const response = await fetch(`/api/search-employees?q=${encodeURIComponent(searchQuery)}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
 
-            // Mock employee data
-            const mockEmployees = [
-                {
-                    name: "Sarah Chen",
-                    role: "Senior Recruiter",
-                    email: `sarah.chen@${company.toLowerCase()}.com`,
-                    profile: "https://linkedin.com/in/sarah-chen-recruiter",
-                    snippet: "Senior Recruiter specializing in technical hiring with 5+ years of experience building engineering teams."
-                },
-                {
-                    name: "Michael Rodriguez",
-                    role: "Technical Recruiter",
-                    email: `michael.rodriguez@${company.toLowerCase()}.com`,
-                    profile: "https://linkedin.com/in/michael-rodriguez-tech",
-                    snippet: "Technical Recruiter focused on software engineering roles. Passionate about connecting top talent with innovative companies."
-                },
-                {
-                    name: "Jennifer Wang",
-                    role: "Talent Acquisition Manager",
-                    email: `jennifer.wang@${company.toLowerCase()}.com`,
-                    profile: "https://linkedin.com/in/jennifer-wang-talent",
-                    snippet: "Talent Acquisition Manager leading recruitment efforts for engineering and product teams."
+            // Persist emails for Bulk Email page
+            try {
+                const fetchedEmails = (data.items || [])
+                    .map(it => it.predictedEmail)
+                    .filter(e => typeof e === 'string' && e.includes('@'));
+                const unique = Array.from(new Set(fetchedEmails));
+                if (unique.length > 0) {
+                    localStorage.setItem('bulkEmailRecipients', JSON.stringify(unique));
                 }
-            ];
-
+            } catch (_) { /* no-op */ }
+            
+            // Clear previous results
             employeeResults.innerHTML = '';
-
-            mockEmployees.forEach(employee => {
-                const card = document.createElement('div');
-                card.className = 'result-card';
-                card.innerHTML = `
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div class="flex-grow-1">
-                            <div class="employee-name">${employee.name}</div>
-                            <div class="employee-role">${employee.role}</div>
-                            <p class="text-muted mb-2">${employee.snippet}</p>
-                            <div class="d-flex align-items-center">
-                                <div class="employee-email">${employee.email}</div>
-                                <button class="email-copy-btn" onclick="copyEmail('${employee.email}')" title="Copy email">
-                                    <i class="bi bi-clipboard"></i>
-                                </button>
+            
+            if (!data.items || data.items.length === 0) {
+                throw new Error('No employees found');
+            }
+            
+            // Process and display the search results
+            employeeResults.innerHTML = data.items.map(employee => {
+                const title = employee.title || 'No title available';
+                const snippet = employee.snippet || 'No description available';
+                const link = employee.link || '#';
+                const email = employee.predictedEmail || '';
+                
+                // Extract a cleaner name from the title
+                const nameMatch = title.match(/^([^-|:]+)/);
+                const displayName = nameMatch ? nameMatch[1].trim() : 'Employee';
+                
+                return `
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="card h-100">
+                            <div class="card-body d-flex flex-column">
+                                <h5 class="card-title">${displayName}</h5>
+                                <p class="card-text text-muted small flex-grow-1">${snippet}</p>
+                                ${email ? `
+                                    <div class="mb-2">
+                                        <div class="input-group input-group-sm">
+                                            <input type="text" class="form-control form-control-sm" value="${email}" readonly>
+                                            <button class="btn btn-outline-secondary copy-email" type="button" data-email="${email}" onclick="copyEmail('${email}')">
+                                                <i class="bi bi-clipboard"></i>
+                                            </button>
+                                        </div>
+                                        <small class="text-muted">Predicted email</small>
+                                    </div>
+                                ` : ''}
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <a href="${link}" target="_blank" class="btn btn-outline-primary btn-sm">
+                                        <i class="bi bi-linkedin me-1"></i> View Profile
+                                    </a>
+                                    ${email ? `
+                                        <a href="mailto:${email}" class="btn btn-primary btn-sm">
+                                            <i class="bi bi-envelope me-1"></i> Email
+                                        </a>
+                                    ` : ''}
+                                </div>
                             </div>
                         </div>
-                        <div>
-                            <a href="${employee.profile}" class="btn btn-linkedin btn-sm" target="_blank" rel="noopener">
-                                <i class="bi bi-linkedin me-1"></i>Profile
-                            </a>
-                        </div>
-                    </div>
-                `;
-                employeeResults.appendChild(card);
-            });
-
-            employeeStats.textContent = `Found ${mockEmployees.length} recruiters at ${company}`;
-            employeeStats.classList.remove('d-none');
-
+                    </div>`;
+            }).join('');
+            
             employeeMessage.innerHTML = `
                 <div class="alert alert-success">
                     <i class="bi bi-check-circle-fill me-2"></i>
-                    Found ${mockEmployees.length} potential contacts at ${company}
+                    Found ${data.items.length} potential contacts at ${company}
                 </div>`;
 
             updateStep(4);
@@ -988,12 +1333,13 @@
                 <div class="alert alert-warning">
                     <i class="bi bi-exclamation-triangle-fill me-2"></i>
                     No employees found for ${company}. Try reaching out through general company channels.
+                    <div class="mt-2 small text-muted">Error: ${error.message}</div>
                 </div>`;
 
             employeeMessage.innerHTML = `
                 <div class="alert alert-warning">
                     <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                    Employee search completed with limited results.
+                    Employee search completed with limited results. ${error.message}
                 </div>`;
         }
     }
@@ -1156,8 +1502,8 @@
         }, 2000);
     }
 
-    // Clear responses when URL changes
-    document.getElementById('jobUrl').addEventListener('input', () => {
+    // Clear responses when job text changes
+    document.getElementById('jobText').addEventListener('input', () => {
         const jobDescription = document.getElementById('jobDescription');
         const latexCode = document.getElementById('latexCode');
         const employeeResults = document.getElementById('employeeResults');
@@ -1165,7 +1511,7 @@
         jobDescription.innerHTML = `
             <div class="placeholder-content">
                 <i class="bi bi-file-earmark-text placeholder-icon"></i>
-                <p class="mb-0">The scraped job description will appear here</p>
+                <p class="mb-0">The pasted job description will appear here</p>
             </div>`;
 
         latexCode.innerHTML = `
@@ -1197,6 +1543,78 @@
             updateStep(1);
         }
     });
+
+    // Manual trigger for employee search
+    document.getElementById('findEmployeesButton').addEventListener('click', async () => {
+        const ci = document.getElementById('companyInput');
+        const name = (ci?.value || '').trim();
+        if (!name) {
+            alert('Please enter a company name');
+            return;
+        }
+        await searchEmployees(name);
+    });
+
+    // Compute both Basic and Advanced changes eagerly after using description (non-lazy toggle)
+    (function hookOptimizeDualRun(){
+        const btn = document.getElementById('useDescriptionButton');
+        if (!btn) return;
+        btn.addEventListener('click', () => {
+            setTimeout(async () => {
+                try {
+                    const jobTextEl = document.getElementById('jobText');
+                    const jobTextVal = jobTextEl ? jobTextEl.value.trim() : '';
+                    const matchPre = document.querySelector('#jobDescription pre');
+                    const matchesText = matchPre ? matchPre.textContent : '';
+                    if (!jobTextVal || !matchesText) return;
+
+                    const resp = await fetch('/api/optimize-resume', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ jobDescription: jobTextVal, pointsToAdd: matchesText })
+                    });
+                    if (!resp.ok) return;
+                    const data = await resp.json();
+                    const basicText = data.basicChanges || '';
+                    const advText = data.advancedChanges || '';
+                    const changesBox = document.getElementById('resumeChanges');
+                    if (!changesBox) return;
+                    let currentMode = document.getElementById('optAdvancedBtn')?.classList.contains('active') ? 'advanced' : 'basic';
+                    function render() {
+                        const content = currentMode === 'advanced' ? advText : basicText;
+                        changesBox.innerHTML = `<pre class="mb-0" style="white-space: pre-wrap; word-wrap: break-word;">${(content || '').replace(/</g, '&lt;')}</pre>`;
+                    }
+                    render();
+                    const basicBtn = document.getElementById('optBasicBtn');
+                    const advBtn = document.getElementById('optAdvancedBtn');
+                    if (basicBtn && advBtn) {
+                        basicBtn.onclick = () => { currentMode = 'basic'; basicBtn.classList.add('active'); advBtn.classList.remove('active'); render(); };
+                        advBtn.onclick = () => { currentMode = 'advanced'; advBtn.classList.add('active'); basicBtn.classList.remove('active'); render(); };
+                    }
+                    const cbtn = document.getElementById('copyChangesButton');
+                    if (cbtn) {
+                        cbtn.classList.remove('d-none');
+                        cbtn.onclick = function(){ const n=document.querySelector('#resumeChanges pre'); if(n){ navigator.clipboard.writeText(n.textContent);} };
+                    }
+                } catch (_) {}
+            }, 1200);
+        });
+    })();
 </script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

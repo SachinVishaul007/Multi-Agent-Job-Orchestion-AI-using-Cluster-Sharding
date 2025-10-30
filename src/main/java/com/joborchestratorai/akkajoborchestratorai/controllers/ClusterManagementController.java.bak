@@ -1,0 +1,280 @@
+package com.joborchestratorai.akkajoborchestratorai.controllers;
+
+import akka.actor.typed.ActorSystem;
+import akka.cluster.Cluster;
+import akka.cluster.sharding.ClusterSharding;
+import com.joborchestratorai.akkajoborchestratorai.services.ClusteredResumeSearchService;
+import com.joborchestratorai.akkajoborchestratorai.services.EventSourcingService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import scala.jdk.CollectionConverters;
+
+@RestController
+@RequestMapping("/api/cluster")
+@Profile({"node1", "node2", "node3", "node4", "clustered"})
+public class ClusterManagementController {
+
+    private static final Logger logger = LoggerFactory.getLogger(ClusterManagementController.class);
+
+    @Autowired
+    private ActorSystem<?> actorSystem;
+    
+    @Autowired
+    private ClusteredResumeSearchService clusteredService;
+    
+    @Autowired
+    private EventSourcingService eventSourcingService;
+
+    @GetMapping("/info")
+    public ResponseEntity<Map<String, Object>> getClusterInfo() {
+        try {
+            Cluster cluster = Cluster.get(actorSystem);
+            Map<String, Object> info = new HashMap<>();
+            
+            // Basic cluster info
+            info.put("clusterName", "JobOrchestratorSystem");
+            info.put("selfAddress", cluster.selfAddress().toString());
+            info.put("selfRoles", CollectionConverters.SetHasAsJava(cluster.selfRoles()).asJava());
+            info.put("selfUniqueAddress", cluster.selfMember().uniqueAddress().toString());
+            
+            // Leadership info
+            info.put("leader", cluster.state().getLeader().isDefined() ? 
+                     cluster.state().getLeader().get().toString() : "none");
+            info.put("isLeader", cluster.state().getLeader().isDefined() && 
+                     cluster.state().getLeader().get().equals(cluster.selfMember().address()));
+            
+            // Member status
+            info.put("memberStatus", cluster.selfMember().status().toString());
+            info.put("totalMembers", CollectionConverters.SetHasAsJava(cluster.state().getMembers()).asJava().size());
+            info.put("unreachableMembers", CollectionConverters.SetHasAsJava(cluster.state().getUnreachable()).asJava().size());
+            
+            // Sharding info
+            try {
+                ClusterSharding sharding = ClusterSharding.get(actorSystem);
+                info.put("shardingEnabled", true);
+                // Add more sharding details if needed
+            } catch (Exception e) {
+                info.put("shardingEnabled", false);
+                info.put("shardingError", e.getMessage());
+            }
+            
+            return ResponseEntity.ok(info);
+            
+        } catch (Exception e) {
+            logger.error("Failed to get cluster info: {}", e.getMessage());
+            return ResponseEntity.status(500).body(Map.of(
+                "error", "Failed to retrieve cluster information: " + e.getMessage()
+            ));
+        }
+    }
+
+    @GetMapping("/datasets")
+    public ResponseEntity<Map<String, Object>> getDatasetInfo() {
+        try {
+            List<String> datasets = clusteredService.getAllDatasetIds();
+            
+            Map<String, Object> info = new HashMap<>();
+            info.put("datasets", datasets);
+            info.put("count", datasets.size());
+            info.put("timestamp", Instant.now().toString());
+            
+            return ResponseEntity.ok(info);
+            
+        } catch (Exception e) {
+            logger.error("Failed to get dataset info: {}", e.getMessage());
+            return ResponseEntity.status(500).body(Map.of(
+                "error", "Failed to retrieve dataset information: " + e.getMessage()
+            ));
+        }
+    }
+
+    @PostMapping("/search/test")
+    public ResponseEntity<Map<String, Object>> testDistributedSearch(@RequestBody Map<String, String> request) {
+        try {
+            String query = request.get("query");
+            if (query == null || query.trim().isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Query parameter is required"
+                ));
+            }
+            
+            logger.info("Testing distributed search with query: {}", query);
+            
+            List<String> datasets = clusteredService.getAllDatasetIds();
+            if (datasets.isEmpty()) {
+                return ResponseEntity.ok(Map.of(
+                    "message", "No datasets available for testing",
+                    "datasets", datasets
+                ));
+            }
+            
+            // Test search across first available dataset
+            String testDataset = datasets.get(0);
+            CompletableFuture<List<com.joborchestratorai.akkajoborchestratorai.models.SearchResult>> searchFuture = 
+                clusteredService.searchAcrossDatasets(Arrays.asList(testDataset), query, 5)
+                .orTimeout(30, TimeUnit.SECONDS);
+            
+            List<com.joborchestratorai.akkajoborchestratorai.models.SearchResult> results = 
+                searchFuture.get(30, TimeUnit.SECONDS);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("query", query);
+            response.put("testedDataset", testDataset);
+            response.put("resultCount", results.size());
+            response.put("results", results.stream()
+                .map(r -> Map.of("content", r.getContent(), "score", r.getScore()))
+                .toArray());
+            response.put("timestamp", Instant.now().toString());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            logger.error("Distributed search test failed: {}", e.getMessage());
+            return ResponseEntity.status(500).body(Map.of(
+                "success", false,
+                "error", "Search test failed: " + e.getMessage(),
+                "timestamp", Instant.now().toString()
+            ));
+        }
+    }
+
+    @PostMapping("/eventsourcing/test")
+    public ResponseEntity<Map<String, Object>> testEventSourcing(@RequestBody Map<String, String> request) {
+        try {
+            String testContent = request.getOrDefault("content", "Test resume content for event sourcing");
+            String testCompany = request.getOrDefault("company", "test-company");
+            String testResumeId = "test-resume-" + System.currentTimeMillis();
+            
+            logger.info("Testing event sourcing with resume ID: {}", testResumeId);
+            
+            CompletableFuture<EventSourcingService.ResumeProcessingResult> processingFuture = 
+                eventSourcingService.processResumeWithEventSourcing(testResumeId, testContent, testCompany)
+                .orTimeout(20, TimeUnit.SECONDS);
+            
+            EventSourcingService.ResumeProcessingResult result = processingFuture.get(20, TimeUnit.SECONDS);
+            
+            // Also test status retrieval
+            CompletableFuture<com.joborchestratorai.akkajoborchestratorai.actors.ResumeProcessorActor.StatusResponse> statusFuture = 
+                eventSourcingService.getResumeStatus(testResumeId, testCompany)
+                .orTimeout(10, TimeUnit.SECONDS);
+            
+            com.joborchestratorai.akkajoborchestratorai.actors.ResumeProcessorActor.StatusResponse status = 
+                statusFuture.get(10, TimeUnit.SECONDS);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("processing", Map.of(
+                "resumeId", result.resumeId,
+                "success", result.success,
+                "message", result.message,
+                "companyDomain", result.companyDomain
+            ));
+            response.put("status", Map.of(
+                "resumeId", status.resumeId,
+                "status", status.status,
+                "historyCount", status.history.size()
+            ));
+            response.put("timestamp", Instant.now().toString());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            logger.error("Event sourcing test failed: {}", e.getMessage());
+            return ResponseEntity.status(500).body(Map.of(
+                "success", false,
+                "error", "Event sourcing test failed: " + e.getMessage(),
+                "timestamp", Instant.now().toString()
+            ));
+        }
+    }
+
+    @GetMapping("/performance")
+    public ResponseEntity<Map<String, Object>> getPerformanceMetrics() {
+        try {
+            Map<String, Object> metrics = new HashMap<>();
+            
+            // JVM performance metrics
+            Runtime runtime = Runtime.getRuntime();
+            long totalMemory = runtime.totalMemory();
+            long freeMemory = runtime.freeMemory();
+            long usedMemory = totalMemory - freeMemory;
+            
+            Map<String, Object> jvm = new HashMap<>();
+            jvm.put("totalMemoryMB", totalMemory / (1024 * 1024));
+            jvm.put("usedMemoryMB", usedMemory / (1024 * 1024));
+            jvm.put("freeMemoryMB", freeMemory / (1024 * 1024));
+            jvm.put("memoryUsagePercent", (double) usedMemory / totalMemory * 100);
+            jvm.put("availableProcessors", runtime.availableProcessors());
+            
+            metrics.put("jvm", jvm);
+            
+            // Cluster performance
+            try {
+                Cluster cluster = Cluster.get(actorSystem);
+                Map<String, Object> clusterPerf = new HashMap<>();
+                int memberCount = CollectionConverters.SetHasAsJava(cluster.state().getMembers()).asJava().size();
+                int unreachableCount = CollectionConverters.SetHasAsJava(cluster.state().getUnreachable()).asJava().size();
+                clusterPerf.put("memberCount", memberCount);
+                clusterPerf.put("unreachableCount", unreachableCount);
+                clusterPerf.put("healthyMemberRatio", 
+                    memberCount > 0 ? 
+                    (double)(memberCount - unreachableCount) / memberCount : 0.0);
+                
+                metrics.put("cluster", clusterPerf);
+            } catch (Exception e) {
+                metrics.put("cluster", Map.of("error", e.getMessage()));
+            }
+            
+            // Actor system metrics
+            Map<String, Object> actorSystem = new HashMap<>();
+            actorSystem.put("name", this.actorSystem.name());
+            actorSystem.put("isTerminated", this.actorSystem.whenTerminated().value().isDefined());
+            
+            metrics.put("actorSystem", actorSystem);
+            metrics.put("timestamp", Instant.now().toString());
+            
+            return ResponseEntity.ok(metrics);
+            
+        } catch (Exception e) {
+            logger.error("Failed to get performance metrics: {}", e.getMessage());
+            return ResponseEntity.status(500).body(Map.of(
+                "error", "Failed to retrieve performance metrics: " + e.getMessage()
+            ));
+        }
+    }
+
+    @PostMapping("/cleanup")
+    public ResponseEntity<Map<String, Object>> triggerCleanup() {
+        try {
+            logger.info("Triggering cluster cleanup operations");
+            
+            // Cleanup old event sourcing actors
+            eventSourcingService.cleanupOldActors();
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Cleanup operations triggered successfully");
+            response.put("timestamp", Instant.now().toString());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            logger.error("Cleanup operation failed: {}", e.getMessage());
+            return ResponseEntity.status(500).body(Map.of(
+                "success", false,
+                "error", "Cleanup failed: " + e.getMessage(),
+                "timestamp", Instant.now().toString()
+            ));
+        }
+    }
+}

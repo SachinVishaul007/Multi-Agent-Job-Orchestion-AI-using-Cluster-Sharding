@@ -8,6 +8,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.*;
@@ -15,6 +17,7 @@ import java.util.stream.Collectors;
 
 @Service
 public class OpenAIService {
+    private static final Logger log = LoggerFactory.getLogger(OpenAIService.class);
 
     @Value("${spring.ai.openai.api-key}")
     private String apiKey;
@@ -30,6 +33,40 @@ public class OpenAIService {
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final LocalStorageService storageService;
+    
+    /**
+     * Predicts the most likely email address format for a given person and company
+     * @param fullName The full name of the person (e.g., "John Doe")
+     * @param companyDomain The company domain (e.g., "google.com")
+     * @return The predicted email address or null if unable to determine
+     */
+    public String predictEmailAddress(String fullName, String companyDomain) {
+        try {
+            String systemPrompt = "You are an email format predictor. Given a person's name and company domain, " +
+                    "predict the most likely email address format. Only respond with the email address, nothing else.";
+            
+            String userPrompt = String.format("Name: %s\nCompany Domain: %s\n" +
+                    "Common email formats:\n" +
+                    "1. first.last@company.com\n" +
+                    "2. firstl@company.com\n" +
+                    "3. flast@company.com\n" +
+                    "4. first_last@company.com\n" +
+                    "5. first@company.com\n\n" +
+                    "Based on the name and common email formats, predict the most likely email address:", 
+                    fullName, companyDomain);
+            
+            String response = callOpenAI(systemPrompt, userPrompt, 0.3, 30);
+            
+            // Basic validation of the response
+            if (response != null && response.contains("@") && response.endsWith(companyDomain)) {
+                return response.trim();
+            }
+            return null;
+        } catch (Exception e) {
+            log.error("Error predicting email address", e);
+            return null;
+        }
+    }
 
     public OpenAIService(LocalStorageService storageService) {
         this.storageService = storageService;
@@ -82,6 +119,69 @@ public class OpenAIService {
 
         } catch (Exception e) {
             throw new RuntimeException("Error calling OpenAI API: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Streaming version using Server-Sent Events
+     */
+    public void callOpenAIStream(String systemPrompt, String userPrompt, double temperature, int maxTokens, 
+                                java.util.function.Consumer<String> tokenCallback) {
+        try {
+            String cleanApiKey = Optional.ofNullable(apiKey)
+                    .map(String::trim)
+                    .orElseThrow(() -> new IllegalStateException("OpenAI API key is missing"));
+
+            // Prepare streaming request body
+            Map<String, Object> requestBody = new LinkedHashMap<>();
+            requestBody.put("model", model);
+            requestBody.put("temperature", temperature);
+            requestBody.put("max_tokens", maxTokens);
+            requestBody.put("stream", true);  // Enable streaming
+            requestBody.put("messages", List.of(
+                    Map.of("role", "system", "content", systemPrompt),
+                    Map.of("role", "user", "content", userPrompt)
+            ));
+
+            // Use raw HTTP connection for streaming
+            java.net.URL url = new java.net.URL(OPENAI_API_URL);
+            java.net.HttpURLConnection connection = (java.net.HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("POST");
+            connection.setRequestProperty("Content-Type", "application/json");
+            connection.setRequestProperty("Authorization", "Bearer " + cleanApiKey);
+            connection.setDoOutput(true);
+
+            // Send request
+            try (java.io.OutputStream os = connection.getOutputStream()) {
+                byte[] input = objectMapper.writeValueAsBytes(requestBody);
+                os.write(input, 0, input.length);
+            }
+
+            // Read streaming response
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(connection.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.startsWith("data: ")) {
+                        String data = line.substring(6);
+                        if ("[DONE]".equals(data)) {
+                            break;
+                        }
+                        try {
+                            JsonNode chunk = objectMapper.readTree(data);
+                            JsonNode delta = chunk.path("choices").get(0).path("delta");
+                            if (delta.has("content")) {
+                                String token = delta.path("content").asText();
+                                tokenCallback.accept(token);
+                            }
+                        } catch (Exception e) {
+                            // Skip malformed chunks
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Error in streaming OpenAI API: " + e.getMessage(), e);
         }
     }
 

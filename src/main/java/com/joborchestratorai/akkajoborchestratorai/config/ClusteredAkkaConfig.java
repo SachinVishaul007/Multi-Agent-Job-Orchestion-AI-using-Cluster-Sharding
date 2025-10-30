@@ -53,7 +53,7 @@ public class ClusteredAkkaConfig {
                 ]
                 downing-provider-class = "akka.cluster.sbr.SplitBrainResolverProvider"
                 split-brain-resolver {
-                  active-strategy = "keep-majority"
+                  active-strategy = "keep-oldest"
                   stable-after = 20s
                   keep-majority {
                     role = ""
