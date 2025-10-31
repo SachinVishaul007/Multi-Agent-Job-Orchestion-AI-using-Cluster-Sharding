@@ -35,3 +35,14 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Zone Identifier files (Windows metadata)
+*:Zone.Identifier
+
+# Log files
+*.log
+app.log
+cluster-app.log
+
+# Resume data directories (local storage)
+resume-data/
