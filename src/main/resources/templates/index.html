@@ -967,80 +967,101 @@
                     const optimizePre = changesBox.querySelector('pre');
                     
                     try {
-                        // Start SSE for optimization (this includes both basic and advanced)
-                        const optimizeSSE = new EventSource('/api/optimize-resume-stream?' + 
-                            new URLSearchParams({
-                                jobDescription: jobText,
-                                pointsToAdd: ''
-                            }));
+                        // Start WebSocket for optimization (this includes both basic and advanced)
+                        const optimizeSocket = new WebSocket('ws://localhost:8080/ws/resume-optimize');
+                        let optimizeSocketReady = false;
                         
-                        optimizeSSE.addEventListener('basic-start', () => {
-                            basicContent = '';
-                            if (currentMode === 'basic') optimizePre.textContent = '';
-                        });
-                        
-                        optimizeSSE.addEventListener('basic-token', (event) => {
-                            basicContent += event.data;
-                            if (currentMode === 'basic') optimizePre.textContent = basicContent;
-                        });
-                        
-                        optimizeSSE.addEventListener('advanced-start', () => {
-                            advancedContent = '';
-                            if (currentMode === 'advanced') optimizePre.textContent = '';
-                        });
-                        
-                        optimizeSSE.addEventListener('advanced-token', (event) => {
-                            advancedContent += event.data;
-                            if (currentMode === 'advanced') optimizePre.textContent = advancedContent;
-                        });
-                        
-                        optimizeSSE.addEventListener('complete', () => {
-                            const optimizeEndTime = performance.now();
-                            const optimizeDuration = ((optimizeEndTime - optimizeStartTime) / 1000).toFixed(1);
-                            const timeElement = document.getElementById('optimizeTime');
-                            if (timeElement) {
-                                timeElement.textContent = `⏱️ ${optimizeDuration}s`;
-                                timeElement.classList.remove('d-none');
-                            }
+                        optimizeSocket.onopen = function() {
+                            console.log('Resume optimization WebSocket connected');
+                            optimizeSocketReady = true;
                             
-                            // Setup mode switching
-                            const basicBtn = document.getElementById('optBasicBtn');
-                            const advBtn = document.getElementById('optAdvancedBtn');
-                            if (basicBtn && advBtn) {
-                                basicBtn.onclick = () => { 
-                                    currentMode = 'basic'; 
-                                    basicBtn.classList.add('active'); 
-                                    advBtn.classList.remove('active'); 
+                            // Send the resume text for optimization
+                            const prompt = `Please analyze the following job description and provide specific suggestions for resume improvement. Focus on:\n` +
+                                           `1. Content improvements (skills, experience, achievements)\n` +
+                                           `2. Formatting and structure\n` +
+                                           `3. Industry-specific recommendations\n` +
+                                           `4. ATS optimization\n\n` +
+                                           `Job Description:\n${jobText}`;
+                            optimizeSocket.send(prompt);
+                        };
+                        
+                        optimizeSocket.onmessage = function(event) {
+                            const message = event.data;
+                            console.log('Received optimization message:', message);
+                            
+                            if (message === '[DONE]') {
+                                const optimizeEndTime = performance.now();
+                                const optimizeDuration = ((optimizeEndTime - optimizeStartTime) / 1000).toFixed(1);
+                                const timeElement = document.getElementById('optimizeTime');
+                                if (timeElement) {
+                                    timeElement.textContent = `⏱️ ${optimizeDuration}s`;
+                                    timeElement.classList.remove('d-none');
+                                }
+                                
+                                // Setup mode switching (for now, we'll use the same content for both modes)
+                                const basicBtn = document.getElementById('optBasicBtn');
+                                const advBtn = document.getElementById('optAdvancedBtn');
+                                if (basicBtn && advBtn) {
+                                    basicBtn.onclick = () => { 
+                                        currentMode = 'basic'; 
+                                        basicBtn.classList.add('active'); 
+                                        advBtn.classList.remove('active'); 
+                                        optimizePre.textContent = basicContent || advancedContent;
+                                    };
+                                    advBtn.onclick = () => { 
+                                        currentMode = 'advanced'; 
+                                        advBtn.classList.add('active'); 
+                                        basicBtn.classList.remove('active'); 
+                                        optimizePre.textContent = advancedContent || basicContent;
+                                    };
+                                }
+                                
+                                const cbtn = document.getElementById('copyChangesButton');
+                                if (cbtn) {
+                                    cbtn.classList.remove('d-none');
+                                    cbtn.onclick = function(){ 
+                                        const n = document.querySelector('#resumeChanges pre'); 
+                                        if(n){ navigator.clipboard.writeText(n.textContent);} 
+                                    };
+                                }
+                                
+                                optimizeSocket.close();
+                                optimizeCompleted = true;
+                                if (matchCompleted) resolve();
+                            } else if (message.startsWith('Starting to analyze')) {
+                                // Optimization is starting
+                                basicContent = '';
+                                advancedContent = '';
+                                optimizePre.textContent = '';
+                            } else if (message.startsWith('Error:')) {
+                                console.log('Optimization error:', message);
+                                optimizePre.textContent = message;
+                                optimizeCompleted = true;
+                                if (matchCompleted) resolve();
+                            } else {
+                                // Append the formatted chunk to content
+                                basicContent += message;
+                                advancedContent = basicContent; // For now, use same content for both modes
+                                if (currentMode === 'basic' || currentMode === 'advanced') {
                                     optimizePre.textContent = basicContent;
-                                };
-                                advBtn.onclick = () => { 
-                                    currentMode = 'advanced'; 
-                                    advBtn.classList.add('active'); 
-                                    basicBtn.classList.remove('active'); 
-                                    optimizePre.textContent = advancedContent;
-                                };
+                                }
                             }
-                            
-                            const cbtn = document.getElementById('copyChangesButton');
-                            if (cbtn) {
-                                cbtn.classList.remove('d-none');
-                                cbtn.onclick = function(){ 
-                                    const n = document.querySelector('#resumeChanges pre'); 
-                                    if(n){ navigator.clipboard.writeText(n.textContent);} 
-                                };
-                            }
-                            
-                            optimizeSSE.close();
-                            optimizeCompleted = true;
-                            if (matchCompleted) resolve();
-                        });
+                        };
                         
-                        optimizeSSE.addEventListener('error', () => {
-                            console.log('Optimize SSE failed, falling back to regular API');
-                            optimizeSSE.close();
+                        optimizeSocket.onerror = function(error) {
+                            console.log('Optimize WebSocket failed, falling back to regular API');
+                            optimizeSocket.close();
                             optimizeCompleted = true;
                             if (matchCompleted) resolve();
-                        });
+                        };
+                        
+                        optimizeSocket.onclose = function() {
+                            console.log('Resume optimization WebSocket closed');
+                            if (!optimizeCompleted) {
+                                optimizeCompleted = true;
+                                if (matchCompleted) resolve();
+                            }
+                        };
                         
                         // For match experiences, use regular API for now (SSE endpoint needs GET support)
                         fetch('/api/match-experiences', {

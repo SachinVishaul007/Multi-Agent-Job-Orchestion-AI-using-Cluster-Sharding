@@ -123,6 +123,86 @@ public class OpenAIService {
     }
 
     /**
+     * Simple streaming method for WebSocket usage with smart buffering
+     */
+    public void callOpenAIStream(String prompt, java.util.function.Consumer<String> chunkCallback) {
+        String systemPrompt = "You are a helpful AI assistant. Provide clear, well-formatted responses.";
+        callOpenAIStreamWithBuffering(systemPrompt, prompt, 0.7, 4000, chunkCallback);
+    }
+
+    /**
+     * Streaming version with smart buffering for better formatting
+     */
+    private void callOpenAIStreamWithBuffering(String systemPrompt, String userPrompt, double temperature, int maxTokens, 
+                                             java.util.function.Consumer<String> chunkCallback) {
+        try {
+            String cleanApiKey = Optional.ofNullable(apiKey)
+                    .map(String::trim)
+                    .orElseThrow(() -> new IllegalStateException("OpenAI API key is missing"));
+
+            Map<String, Object> requestBody = new LinkedHashMap<>();
+            requestBody.put("model", model);
+            requestBody.put("temperature", temperature);
+            requestBody.put("max_tokens", maxTokens);
+            requestBody.put("stream", true);
+            requestBody.put("messages", List.of(
+                    Map.of("role", "system", "content", systemPrompt),
+                    Map.of("role", "user", "content", userPrompt)
+            ));
+
+            java.net.URL url = new java.net.URL(OPENAI_API_URL);
+            java.net.HttpURLConnection connection = (java.net.HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("POST");
+            connection.setRequestProperty("Content-Type", "application/json");
+            connection.setRequestProperty("Authorization", "Bearer " + cleanApiKey);
+            connection.setDoOutput(true);
+
+            try (java.io.OutputStream os = connection.getOutputStream()) {
+                byte[] input = objectMapper.writeValueAsBytes(requestBody);
+                os.write(input, 0, input.length);
+            }
+
+            StringBuilder buffer = new StringBuilder();
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(connection.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.startsWith("data: ")) {
+                        String data = line.substring(6);
+                        if ("[DONE]".equals(data)) {
+                            if (buffer.length() > 0) {
+                                chunkCallback.accept(buffer.toString());
+                            }
+                            break;
+                        }
+                        try {
+                            JsonNode chunk = objectMapper.readTree(data);
+                            JsonNode delta = chunk.path("choices").get(0).path("delta");
+                            if (delta.has("content")) {
+                                String token = delta.path("content").asText();
+                                buffer.append(token);
+                                
+                                String bufferedContent = buffer.toString();
+                                if (bufferedContent.endsWith(" ") || bufferedContent.endsWith(".") || 
+                                    bufferedContent.endsWith("!") || bufferedContent.endsWith("?") ||
+                                    bufferedContent.endsWith(",") || bufferedContent.endsWith(":") ||
+                                    bufferedContent.endsWith("\n")) {
+                                    chunkCallback.accept(bufferedContent);
+                                    buffer.setLength(0);
+                                }
+                            }
+                        } catch (Exception e) {
+                            // Skip malformed chunks
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Error in streaming OpenAI API: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * Streaming version using Server-Sent Events
      */
     public void callOpenAIStream(String systemPrompt, String userPrompt, double temperature, int maxTokens, 
