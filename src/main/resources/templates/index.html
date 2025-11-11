@@ -975,14 +975,8 @@
                             console.log('Resume optimization WebSocket connected');
                             optimizeSocketReady = true;
                             
-                            // Send the resume text for optimization
-                            const prompt = `Please analyze the following job description and provide specific suggestions for resume improvement. Focus on:\n` +
-                                           `1. Content improvements (skills, experience, achievements)\n` +
-                                           `2. Formatting and structure\n` +
-                                           `3. Industry-specific recommendations\n` +
-                                           `4. ATS optimization\n\n` +
-                                           `Job Description:\n${jobText}`;
-                            optimizeSocket.send(prompt);
+                            // Send the job description for optimization
+                            optimizeSocket.send(jobText);
                         };
                         
                         optimizeSocket.onmessage = function(event) {
@@ -998,7 +992,7 @@
                                     timeElement.classList.remove('d-none');
                                 }
                                 
-                                // Setup mode switching (for now, we'll use the same content for both modes)
+                                // Setup mode switching with actual different content
                                 const basicBtn = document.getElementById('optBasicBtn');
                                 const advBtn = document.getElementById('optAdvancedBtn');
                                 if (basicBtn && advBtn) {
@@ -1006,14 +1000,21 @@
                                         currentMode = 'basic'; 
                                         basicBtn.classList.add('active'); 
                                         advBtn.classList.remove('active'); 
-                                        optimizePre.textContent = basicContent || advancedContent;
+                                        optimizePre.textContent = basicContent;
                                     };
                                     advBtn.onclick = () => { 
                                         currentMode = 'advanced'; 
                                         advBtn.classList.add('active'); 
                                         basicBtn.classList.remove('active'); 
-                                        optimizePre.textContent = advancedContent || basicContent;
+                                        optimizePre.textContent = advancedContent;
                                     };
+                                    
+                                    // Show the current mode content
+                                    if (currentMode === 'basic') {
+                                        optimizePre.textContent = basicContent;
+                                    } else {
+                                        optimizePre.textContent = advancedContent;
+                                    }
                                 }
                                 
                                 const cbtn = document.getElementById('copyChangesButton');
@@ -1033,18 +1034,31 @@
                                 basicContent = '';
                                 advancedContent = '';
                                 optimizePre.textContent = '';
+                            } else if (message === '[BASIC-START]') {
+                                basicContent = '';
+                                if (currentMode === 'basic') optimizePre.textContent = '';
+                            } else if (message.startsWith('[BASIC-TOKEN]')) {
+                                const token = message.substring(13); // Remove '[BASIC-TOKEN]' prefix
+                                basicContent += token;
+                                if (currentMode === 'basic') optimizePre.textContent = basicContent;
+                            } else if (message === '[BASIC-COMPLETE]') {
+                                // Basic optimization complete
+                                console.log('Basic optimization complete');
+                            } else if (message === '[ADVANCED-START]') {
+                                advancedContent = '';
+                                if (currentMode === 'advanced') optimizePre.textContent = '';
+                            } else if (message.startsWith('[ADVANCED-TOKEN]')) {
+                                const token = message.substring(17); // Remove '[ADVANCED-TOKEN]' prefix
+                                advancedContent += token;
+                                if (currentMode === 'advanced') optimizePre.textContent = advancedContent;
+                            } else if (message === '[ADVANCED-COMPLETE]') {
+                                // Advanced optimization complete
+                                console.log('Advanced optimization complete');
                             } else if (message.startsWith('Error:')) {
                                 console.log('Optimization error:', message);
                                 optimizePre.textContent = message;
                                 optimizeCompleted = true;
                                 if (matchCompleted) resolve();
-                            } else {
-                                // Append the formatted chunk to content
-                                basicContent += message;
-                                advancedContent = basicContent; // For now, use same content for both modes
-                                if (currentMode === 'basic' || currentMode === 'advanced') {
-                                    optimizePre.textContent = basicContent;
-                                }
                             }
                         };
                         
