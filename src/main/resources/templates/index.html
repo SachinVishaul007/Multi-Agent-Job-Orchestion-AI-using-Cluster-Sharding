@@ -523,9 +523,9 @@
                 <form id="uploadForm">
                     <div class="row g-3 align-items-end">
                         <div class="col-md-9">
-                            <label for="resumeFile" class="form-label fw-bold">Choose Excel file containing your resume</label>
-                            <input type="file" class="form-control" id="resumeFile" accept=".xlsx,.xls" required>
-                            <div class="form-text">Upload your resume in Excel format (.xlsx or .xls)</div>
+                            <label for="resumeFile" class="form-label fw-bold">Upload Master Resume</label>
+                            <input type="file" class="form-control" id="resumeFile" accept=".xlsx,.xls,.pdf,.docx" required>
+                            <div class="form-text">Upload your complete resume with all experiences (Excel, PDF, or Word format)</div>
                         </div>
                         <div class="col-md-3">
                             <button type="submit" class="btn btn-primary w-100">
@@ -601,13 +601,7 @@
                 </div>
                 <div class="mt-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <div>
-                            <label class="form-label fw-bold mb-0">Suggested Resume Changes:</label>
-                            <div class="btn-group btn-group-sm ms-3" role="group" aria-label="Mode toggle">
-                                <button type="button" id="optBasicBtn" class="btn btn-outline-primary active">Basic</button>
-                                <button type="button" id="optAdvancedBtn" class="btn btn-outline-primary">Advanced</button>
-                            </div>
-                        </div>
+                        <label class="form-label fw-bold mb-0">Suggested Resume Changes:</label>
                         <div class="d-flex align-items-center gap-2">
                             <span id="optimizeTime" class="badge bg-light text-dark d-none" title="Response time">⏱️ 0.0s</span>
                             <button id="copyChangesButton" class="btn btn-sm btn-outline-secondary d-none" title="Copy to clipboard">
@@ -713,6 +707,83 @@
     let jobDescriptionData = null;
     let resumeUploaded = false;
     let companyName = '';
+
+    // Initialize page with previously uploaded resume data
+    function initializeUploadedResumes() {
+        try {
+            const storedResumeInfo = localStorage.getItem('uploadedResumeInfo');
+            if (storedResumeInfo) {
+                const resumeInfo = JSON.parse(storedResumeInfo);
+                const uploadMessage = document.getElementById('uploadMessage');
+                
+                // Display previously uploaded file info
+                uploadMessage.innerHTML = `
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        <strong>Previously uploaded files found:</strong>
+                        <div class="mt-2">
+                            <small><strong>Master Resume:</strong> ${resumeInfo.masterResumeFile}</small><br>
+                            ${resumeInfo.baseResumeFile ? `<small><strong>Base Resume:</strong> ${resumeInfo.baseResumeFile}</small><br>` : ''}
+                            <small class="text-muted">Uploaded: ${new Date(resumeInfo.uploadedAt).toLocaleString()}</small>
+                        </div>
+                        ${resumeInfo.detectedTags && resumeInfo.detectedTags.length > 0 ? 
+                            `<div class="mt-2 small"><strong>Tags (${resumeInfo.detectedTags.length}):</strong> ${resumeInfo.detectedTags.join(', ')}</div>` : ''}
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-success" onclick="useStoredResumes()">
+                            <i class="bi bi-check-circle me-1"></i>Use These Files
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="clearStoredResumes()">
+                            <i class="bi bi-trash me-1"></i>Upload New Files
+                        </button>
+                    </div>
+                `;
+                
+                // Show the upload card
+                document.getElementById('uploadCard').style.display = 'block';
+            }
+        } catch (e) {
+            console.log('Error loading stored resume info:', e);
+        }
+    }
+
+    // Use stored resumes without re-uploading
+    window.useStoredResumes = function() {
+        const uploadMessage = document.getElementById('uploadMessage');
+        uploadMessage.innerHTML = `
+            <div class="alert alert-success">
+                <i class="bi bi-check-circle-fill me-2"></i>
+                Using previously uploaded resumes. Ready to proceed!
+            </div>
+        `;
+        
+        resumeUploaded = true;
+        updateStep(2);
+        
+        setTimeout(() => {
+            document.getElementById('pasteCard').scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+            });
+        }, 300);
+    };
+
+    // Clear stored resume data
+    window.clearStoredResumes = function() {
+        try {
+            localStorage.removeItem('uploadedResumeInfo');
+            localStorage.removeItem('detectedTags');
+        } catch (e) {
+            console.log('Error clearing stored resume data:', e);
+        }
+        
+        document.getElementById('uploadMessage').innerHTML = '';
+        resumeUploaded = false;
+        updateStep(1);
+    };
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', initializeUploadedResumes);
 
     // Utility function to extract company name from URL
     function extractCompanyFromUrl(url) {
@@ -855,14 +926,28 @@
                 throw new Error(`Upload failed with status ${res.status}`);
             }
             const data = await res.json();
+            
+            // Store uploaded resume info in localStorage
+            const resumeInfo = {
+                masterResumeFile: fileInput.files[0].name,
+                baseResumeFile: baseResumeInput && baseResumeInput.files && baseResumeInput.files[0] ? baseResumeInput.files[0].name : null,
+                uploadedAt: new Date().toISOString(),
+                detectedTags: data.detectedTags || []
+            };
+            
+            try {
+                localStorage.setItem('uploadedResumeInfo', JSON.stringify(resumeInfo));
+                localStorage.setItem('detectedTags', JSON.stringify(data.detectedTags || []));
+            } catch(e) {
+                console.log('Failed to store resume info in localStorage:', e);
+            }
+            
             if (Array.isArray(data.detectedTags)) {
                 console.log('Detected Tags:', data.detectedTags);
-                try { localStorage.setItem('detectedTags', JSON.stringify(data.detectedTags)); } catch(_) {}
-                // Optional: show a small preview under the upload card
                 uploadMessage.innerHTML = `
                 <div class="alert alert-success">
                     <i class="bi bi-check-circle-fill me-2"></i>
-                    Resume uploaded successfully!
+                    Resume uploaded successfully! Files will be remembered for future sessions.
                 </div>
                 <div class="mt-2 small"><strong>Detected Tags (${data.detectedTags.length}):</strong> ${data.detectedTags.join(', ')}</div>`;
             } else {
@@ -870,7 +955,7 @@
                 uploadMessage.innerHTML = `
                 <div class="alert alert-success">
                     <i class="bi bi-check-circle-fill me-2"></i>
-                    Resume uploaded successfully!
+                    Resume uploaded successfully! Files will be remembered for future sessions.
                 </div>`;
             }
 
@@ -948,6 +1033,23 @@
             const matchStartTime = performance.now();
             const optimizeStartTime = performance.now();
 
+            // Function to format markdown-like text to HTML
+            function formatChangesContent(text) {
+                return text
+                    .replace(/## 🔄 RECOMMENDED CHANGES/g, '<h3 class="text-primary mb-3">🔄 <strong>RECOMMENDED CHANGES</strong></h3>')
+                    .replace(/### ❌ REMOVE FROM BASE RESUME/g, '<h4 class="text-danger mt-4 mb-3">❌ <strong>REMOVE FROM BASE RESUME</strong></h4>')
+                    .replace(/### ✅ ADD FROM MASTER RESUME/g, '<h4 class="text-success mt-4 mb-3">✅ <strong>ADD FROM MASTER RESUME</strong></h4>')
+                    .replace(/### 🎯 KEY IMPROVEMENTS/g, '<h4 class="text-info mt-4 mb-3">🎯 <strong>KEY IMPROVEMENTS</strong></h4>')
+                    .replace(/\*\*([^*]+):\*\*/g, '<strong class="text-dark">$1:</strong>')
+                    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                    .replace(/• \*\*Why relevant:\*\* ([^\n]+)/g, '• <strong class="text-muted">Why relevant:</strong> <span class="text-secondary">$1</span>')
+                    .replace(/• \*\*Experience:\*\* ([^\n]+)/g, '• <strong class="text-muted">Experience:</strong> <span class="text-dark">$1</span>')
+                    .replace(/^• ([^\n]+)/gm, '<div class="ms-3 mb-2">• $1</div>')
+                    .replace(/---/g, '<hr class="my-4">')
+                    .replace(/\n\n/g, '<br><br>')
+                    .replace(/\n/g, '<br>');
+            }
+
             // Function to handle real-time streaming with SSE
             async function handleRealTimeStreaming(jobText, detectedTags, responseBox, changesBox, 
                 copyJobButton, generateButton, matchStartTime, optimizeStartTime) {
@@ -962,9 +1064,9 @@
                     
                     // Setup response boxes for streaming
                     responseBox.innerHTML = '<pre class="mb-0" style="white-space: pre-wrap; word-wrap: break-word;"></pre>';
-                    changesBox.innerHTML = '<pre class="mb-0" style="white-space: pre-wrap; word-wrap: break-word;"></pre>';
+                    changesBox.innerHTML = '<div class="mb-0 formatted-content" style="white-space: pre-wrap; word-wrap: break-word; line-height: 1.6;"></div>';
                     const matchPre = responseBox.querySelector('pre');
-                    const optimizePre = changesBox.querySelector('pre');
+                    const optimizePre = changesBox.querySelector('.formatted-content');
                     
                     try {
                         // Start WebSocket for optimization (this includes both basic and advanced)
@@ -992,30 +1094,8 @@
                                     timeElement.classList.remove('d-none');
                                 }
                                 
-                                // Setup mode switching with actual different content
-                                const basicBtn = document.getElementById('optBasicBtn');
-                                const advBtn = document.getElementById('optAdvancedBtn');
-                                if (basicBtn && advBtn) {
-                                    basicBtn.onclick = () => { 
-                                        currentMode = 'basic'; 
-                                        basicBtn.classList.add('active'); 
-                                        advBtn.classList.remove('active'); 
-                                        optimizePre.textContent = basicContent;
-                                    };
-                                    advBtn.onclick = () => { 
-                                        currentMode = 'advanced'; 
-                                        advBtn.classList.add('active'); 
-                                        basicBtn.classList.remove('active'); 
-                                        optimizePre.textContent = advancedContent;
-                                    };
-                                    
-                                    // Show the current mode content
-                                    if (currentMode === 'basic') {
-                                        optimizePre.textContent = basicContent;
-                                    } else {
-                                        optimizePre.textContent = advancedContent;
-                                    }
-                                }
+                                // Only show basic content since we removed the toggle
+                                optimizePre.innerHTML = formatChangesContent(basicContent);
                                 
                                 const cbtn = document.getElementById('copyChangesButton');
                                 if (cbtn) {
@@ -1033,27 +1113,23 @@
                                 // Optimization is starting
                                 basicContent = '';
                                 advancedContent = '';
-                                optimizePre.textContent = '';
+                                optimizePre.innerHTML = '';
                             } else if (message === '[BASIC-START]') {
                                 basicContent = '';
-                                if (currentMode === 'basic') optimizePre.textContent = '';
+                                optimizePre.innerHTML = '';
                             } else if (message.startsWith('[BASIC-TOKEN]')) {
                                 const token = message.substring(13); // Remove '[BASIC-TOKEN]' prefix
                                 basicContent += token;
-                                if (currentMode === 'basic') optimizePre.textContent = basicContent;
+                                optimizePre.innerHTML = formatChangesContent(basicContent);
                             } else if (message === '[BASIC-COMPLETE]') {
                                 // Basic optimization complete
                                 console.log('Basic optimization complete');
                             } else if (message === '[ADVANCED-START]') {
-                                advancedContent = '';
-                                if (currentMode === 'advanced') optimizePre.textContent = '';
+                                // Skip advanced content - we only show basic in Step 3
                             } else if (message.startsWith('[ADVANCED-TOKEN]')) {
-                                const token = message.substring(17); // Remove '[ADVANCED-TOKEN]' prefix
-                                advancedContent += token;
-                                if (currentMode === 'advanced') optimizePre.textContent = advancedContent;
+                                // Skip advanced content - we only show basic in Step 3
                             } else if (message === '[ADVANCED-COMPLETE]') {
-                                // Advanced optimization complete
-                                console.log('Advanced optimization complete');
+                                // Skip advanced content - we only show basic in Step 3
                             } else if (message.startsWith('Error:')) {
                                 console.log('Optimization error:', message);
                                 optimizePre.textContent = message;
@@ -1191,26 +1267,15 @@
                     const basicText = data?.basicChanges || '';
                     const advText = data?.advancedChanges || '';
                     
-                    let currentMode = 'basic';
-                    function renderDual() {
-                        const content = currentMode === 'advanced' ? advText : basicText;
-                        streamText(changesBox, content, () => {
-                            // Show timing
-                            const timeElement = document.getElementById('optimizeTime');
-                            if (timeElement) {
-                                timeElement.textContent = `⏱️ ${optimizeDuration}s`;
-                                timeElement.classList.remove('d-none');
-                            }
-                        });
-                    }
-                    renderDual();
-                    
-                    const basicBtn = document.getElementById('optBasicBtn');
-                    const advBtn = document.getElementById('optAdvancedBtn');
-                    if (basicBtn && advBtn) {
-                        basicBtn.onclick = () => { currentMode = 'basic'; basicBtn.classList.add('active'); advBtn.classList.remove('active'); renderDual(); };
-                        advBtn.onclick = () => { currentMode = 'advanced'; advBtn.classList.add('active'); basicBtn.classList.remove('active'); renderDual(); };
-                    }
+                    // Only show basic content since we removed the toggle
+                    streamText(changesBox, basicText, () => {
+                        // Show timing
+                        const timeElement = document.getElementById('optimizeTime');
+                        if (timeElement) {
+                            timeElement.textContent = `⏱️ ${optimizeDuration}s`;
+                            timeElement.classList.remove('d-none');
+                        }
+                    });
                     const cbtn = document.getElementById('copyChangesButton');
                     if (cbtn) {
                         cbtn.classList.remove('d-none');
@@ -1405,68 +1470,35 @@
         updateStep(5);
 
         try {
-            // Simulate generation
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            // Call the real API to generate resume
+            const response = await fetch('/api/generate-resume', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    jobDescription: jobDescriptionData
+                })
+            });
 
-            const mockLatexCode = `\\documentclass[11pt,a4paper]{moderncv}
-\\moderncvstyle{classic}
-\\moderncvcolor{blue}
-\\usepackage[utf8]{inputenc}
-\\usepackage[scale=0.75]{geometry}
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
 
-\\name{John}{Doe}
-\\title{Full Stack Software Engineer}
-\\address{123 Main St}{San Francisco, CA 94102}
-\\phone[mobile]{+1~(555)~123~4567}
-\\email{john.doe@email.com}
-\\social[linkedin]{johndoe}
-\\social[github]{johndoe}
+            const data = await response.json();
+            const latexCode = data.latexCode || '';
 
-\\begin{document}
-\\makecvtitle
+            if (!latexCode) {
+                throw new Error('No LaTeX code received from server');
+            }
 
-\\section{Professional Summary}
-\\cvitem{}{Experienced Full Stack Software Engineer with 4+ years developing scalable web applications using JavaScript, React, and Node.js. Proven track record in cloud platforms and modern development practices.}
-
-\\section{Technical Skills}
-\\cvitem{Frontend}{React, TypeScript, JavaScript, HTML5, CSS3, Redux}
-\\cvitem{Backend}{Node.js, Express.js, REST APIs, GraphQL}
-\\cvitem{Databases}{PostgreSQL, MongoDB, Redis}
-\\cvitem{Cloud}{AWS (EC2, S3, Lambda), Docker, Kubernetes}
-\\cvitem{Tools}{Git, CI/CD, Jest, Webpack}
-
-\\section{Professional Experience}
-\\cventry{2021--Present}{Senior Software Engineer}{TechCorp Inc.}{San Francisco, CA}{}{
-\\begin{itemize}
-\\item Developed and maintained full-stack applications serving 100K+ daily active users
-\\item Led migration to microservices architecture, improving system scalability by 300\\%
-\\item Implemented CI/CD pipelines reducing deployment time by 75\\%
-\\item Collaborated with cross-functional teams to deliver features ahead of schedule
-\\end{itemize}}
-
-\\cventry{2019--2021}{Software Engineer}{StartupXYZ}{Palo Alto, CA}{}{
-\\begin{itemize}
-\\item Built responsive web applications using React and Node.js
-\\item Optimized database queries resulting in 40\\% performance improvement
-\\item Participated in agile development process and code reviews
-\\end{itemize}}
-
-\\section{Education}
-\\cventry{2015--2019}{Bachelor of Science in Computer Science}{University of California, Berkeley}{Berkeley, CA}{GPA: 3.8/4.0}{}
-
-\\section{Projects}
-\\cvitem{E-commerce Platform}{Built full-stack e-commerce solution with React, Node.js, and PostgreSQL}
-\\cvitem{Real-time Chat App}{Developed WebSocket-based chat application with user authentication}
-
-\\end{document}`;
-
-            latexBox.innerHTML = `<pre class="mb-0" style="white-space: pre-wrap; word-wrap: break-word;">${mockLatexCode}</pre>`;
+            latexBox.innerHTML = `<pre class="mb-0" style="white-space: pre-wrap; word-wrap: break-word;">${latexCode}</pre>`;
             copyLatexButton.classList.remove('d-none');
 
             generateMessage.innerHTML = `
                 <div class="alert alert-success">
                     <i class="bi bi-check-circle-fill me-2"></i>
-                    Resume generated successfully! Copy the LaTeX code and compile it.
+                    Resume generated successfully using local AI! Copy the LaTeX code and compile it.
                 </div>`;
 
             setTimeout(() => {
@@ -1590,51 +1622,7 @@
         await searchEmployees(name);
     });
 
-    // Compute both Basic and Advanced changes eagerly after using description (non-lazy toggle)
-    (function hookOptimizeDualRun(){
-        const btn = document.getElementById('useDescriptionButton');
-        if (!btn) return;
-        btn.addEventListener('click', () => {
-            setTimeout(async () => {
-                try {
-                    const jobTextEl = document.getElementById('jobText');
-                    const jobTextVal = jobTextEl ? jobTextEl.value.trim() : '';
-                    const matchPre = document.querySelector('#jobDescription pre');
-                    const matchesText = matchPre ? matchPre.textContent : '';
-                    if (!jobTextVal || !matchesText) return;
-
-                    const resp = await fetch('/api/optimize-resume', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ jobDescription: jobTextVal, pointsToAdd: matchesText })
-                    });
-                    if (!resp.ok) return;
-                    const data = await resp.json();
-                    const basicText = data.basicChanges || '';
-                    const advText = data.advancedChanges || '';
-                    const changesBox = document.getElementById('resumeChanges');
-                    if (!changesBox) return;
-                    let currentMode = document.getElementById('optAdvancedBtn')?.classList.contains('active') ? 'advanced' : 'basic';
-                    function render() {
-                        const content = currentMode === 'advanced' ? advText : basicText;
-                        changesBox.innerHTML = `<pre class="mb-0" style="white-space: pre-wrap; word-wrap: break-word;">${(content || '').replace(/</g, '&lt;')}</pre>`;
-                    }
-                    render();
-                    const basicBtn = document.getElementById('optBasicBtn');
-                    const advBtn = document.getElementById('optAdvancedBtn');
-                    if (basicBtn && advBtn) {
-                        basicBtn.onclick = () => { currentMode = 'basic'; basicBtn.classList.add('active'); advBtn.classList.remove('active'); render(); };
-                        advBtn.onclick = () => { currentMode = 'advanced'; advBtn.classList.add('active'); basicBtn.classList.remove('active'); render(); };
-                    }
-                    const cbtn = document.getElementById('copyChangesButton');
-                    if (cbtn) {
-                        cbtn.classList.remove('d-none');
-                        cbtn.onclick = function(){ const n=document.querySelector('#resumeChanges pre'); if(n){ navigator.clipboard.writeText(n.textContent);} };
-                    }
-                } catch (_) {}
-            }, 1200);
-        });
-    })();
+    // This code is no longer needed since we removed the dual mode toggle
 </script>
 </body>
 </html>

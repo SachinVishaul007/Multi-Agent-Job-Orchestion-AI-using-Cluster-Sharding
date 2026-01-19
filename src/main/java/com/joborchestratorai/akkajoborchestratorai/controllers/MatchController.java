@@ -3,6 +3,7 @@ package com.joborchestratorai.akkajoborchestratorai.controllers;
 import com.joborchestratorai.akkajoborchestratorai.models.ResumeData;
 import com.joborchestratorai.akkajoborchestratorai.services.LocalStorageService;
 import com.joborchestratorai.akkajoborchestratorai.services.OpenAIService;
+import com.joborchestratorai.akkajoborchestratorai.services.HybridLLMService;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,11 +18,13 @@ import java.util.*;
 public class MatchController {
 
     private final OpenAIService openAIService;
+    private final HybridLLMService hybridLLMService;
     private final LocalStorageService localStorageService;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
-    public MatchController(OpenAIService openAIService, LocalStorageService localStorageService) {
+    public MatchController(OpenAIService openAIService, HybridLLMService hybridLLMService, LocalStorageService localStorageService) {
         this.openAIService = openAIService;
+        this.hybridLLMService = hybridLLMService;
         this.localStorageService = localStorageService;
     }
 
@@ -62,7 +65,7 @@ public class MatchController {
             }
 
             String prompt = buildPrompt(tags, request.jobDescription, bulletPoints, rowsJson);
-            String result = openAIService.processTextWithPrompt(prompt);
+            String result = hybridLLMService.processTextWithPrompt(prompt);
             return ResponseEntity.ok(new MatchResponse(result));
         } catch (IOException e) {
             return ResponseEntity.internalServerError().body(Map.of("error", "Failed to load resume data: " + e.getMessage()));
@@ -124,8 +127,8 @@ public class MatchController {
                     request.jobDescription);
             String advancedPrompt = buildAdvancedOptimizePrompt(baseResume, request.jobDescription);
 
-            String basic = openAIService.processTextWithPrompt(basicPrompt);
-            String advanced = openAIService.processTextWithPrompt(advancedPrompt);
+            String basic = hybridLLMService.processTextWithPrompt(basicPrompt);
+            String advanced = hybridLLMService.processTextWithPrompt(advancedPrompt);
             return ResponseEntity.ok(new OptimizeResponse(basic, advanced));
         } catch (IOException e) {
             return ResponseEntity.internalServerError().body(Map.of("error", "Failed to load base resume: " + e.getMessage()));

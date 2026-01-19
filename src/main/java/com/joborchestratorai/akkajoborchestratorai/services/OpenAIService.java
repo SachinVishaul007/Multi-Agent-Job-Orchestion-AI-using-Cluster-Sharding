@@ -266,16 +266,71 @@ public class OpenAIService {
     }
 
     public String generateTailoredResume(String jobDescription) throws IOException {
-        ResumeData resumeData = storageService.getLatestResumeData();
-
-        if (resumeData == null || resumeData.getResumePoints().isEmpty()) {
-            throw new RuntimeException("No resume data available. Please upload a resume first.");
+        // Get base resume text
+        String baseResume = storageService.getBaseResumeText();
+        if (baseResume == null || baseResume.trim().isEmpty()) {
+            throw new RuntimeException("Base resume not uploaded yet. Please upload a base resume PDF first.");
         }
 
-        String systemPrompt = createSystemPrompt();
-        String userPrompt = createUserPrompt(jobDescription, resumeData);
+        // Get master resume data (bullet points)
+        String masterResume = getMasterResumeData();
+        if (masterResume == null || masterResume.trim().isEmpty()) {
+            throw new RuntimeException("Master resume data not found. Please upload your master resume first.");
+        }
 
-        return callOpenAI(systemPrompt, userPrompt, DEFAULT_TEMPERATURE, DEFAULT_MAX_TOKENS);
+        String prompt = buildAdvancedOptimizePrompt(baseResume, masterResume, jobDescription);
+        return callOpenAI("", prompt, DEFAULT_TEMPERATURE, 4000);
+    }
+
+    private String getMasterResumeData() {
+        try {
+            // Try to get from latest resume data (bullet points)
+            ResumeData resumeData = storageService.getLatestResumeData();
+            if (resumeData != null && resumeData.getResumePoints() != null && !resumeData.getResumePoints().isEmpty()) {
+                return String.join("\n", resumeData.getResumePoints());
+            }
+            
+            // Fallback to base resume if master data not available
+            String baseText = storageService.getBaseResumeText();
+            return baseText != null ? baseText : "";
+        } catch (Exception e) {
+            log.error("Error loading master resume data: {}", e.getMessage());
+            return "";
+        }
+    }
+
+    private String buildAdvancedOptimizePrompt(String baseResume, String masterResume, String jd) {
+        return String.format("""
+            ADVANCED RESUME OPTIMIZATION - Complete Optimized LaTeX Resume
+            
+            Job Description:
+            %s
+            
+            Base Resume Template:
+            %s
+            
+            Master Resume Database (all experiences):
+            %s
+            
+            TASK: Generate a complete, optimized LaTeX resume ready to compile.
+            
+            REQUIREMENTS:
+            1. Use the base resume structure and formatting
+            2. Replace less relevant experiences with better matches from master resume
+            3. Use EXACT text from master resume (no modifications)
+            4. Maintain all personal information, education, dates, company names
+            5. Ensure resume fits on ONE page
+            6. Optimize for job requirements while staying truthful
+            
+            OUTPUT: Return ONLY the complete LaTeX code, ready to compile.
+            Do not include explanations or comments - just the compilable LaTeX resume.
+            
+            The resume should:
+            - Keep the same professional structure
+            - Prioritize most relevant experiences from master database
+            - Include job-relevant skills and technologies
+            - Maintain consistent formatting throughout
+            """, jd, baseResume, masterResume);
     }
 
     public String processTextWithPrompt(String prompt) {

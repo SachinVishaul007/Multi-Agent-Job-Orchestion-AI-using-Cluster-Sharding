@@ -1,6 +1,7 @@
 package com.joborchestratorai.akkajoborchestratorai.websocket;
 
 import com.joborchestratorai.akkajoborchestratorai.services.OpenAIService;
+import com.joborchestratorai.akkajoborchestratorai.services.HybridLLMService;
 import com.joborchestratorai.akkajoborchestratorai.services.LocalStorageService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -16,6 +17,9 @@ public class ResumeOptimizationHandler extends TextWebSocketHandler {
 
     @Autowired
     private OpenAIService openAIService;
+    
+    @Autowired
+    private HybridLLMService hybridLLMService;
     
     @Autowired
     private LocalStorageService localStorageService;
@@ -38,38 +42,30 @@ public class ResumeOptimizationHandler extends TextWebSocketHandler {
                     return;
                 }
                 
+                // Load master resume data from latest upload
+                String masterResume = getMasterResumeData();
+                if (masterResume == null || masterResume.trim().isEmpty()) {
+                    session.sendMessage(new TextMessage("Error: Master resume data not found. Please upload your master resume first."));
+                    return;
+                }
+                
                 session.sendMessage(new TextMessage("Starting to analyze your resume and generate optimization suggestions..."));
                 
-                // Generate Basic optimization first
+                // Generate Basic optimization - What to Add/Remove
                 session.sendMessage(new TextMessage("[BASIC-START]"));
+                session.sendMessage(new TextMessage("[BASIC-TOKEN]🔄 Processing with local AI model (this may take 15-20 seconds)...\n\n"));
                 StringBuilder basicContent = new StringBuilder();
-                String basicPrompt = buildOptimizePrompt(baseResume, "", jobDescription);
+                String basicPrompt = buildOptimizePrompt(baseResume, masterResume, jobDescription);
                 
-                openAIService.callOpenAIStream(basicPrompt, chunk -> {
-                    try {
-                        basicContent.append(chunk);
-                        session.sendMessage(new TextMessage("[BASIC-TOKEN]" + chunk));
-                    } catch (Exception e) {
-                        System.err.println("Error sending basic message: " + e.getMessage());
-                    }
-                });
+                // Use non-streaming call and send as complete response
+                String result = hybridLLMService.processTextWithPrompt(basicPrompt);
+                if (result != null && !result.trim().isEmpty()) {
+                    basicContent.append(result);
+                    session.sendMessage(new TextMessage("[BASIC-TOKEN]" + result));
+                } else {
+                    session.sendMessage(new TextMessage("[BASIC-TOKEN]No optimization suggestions generated."));
+                }
                 session.sendMessage(new TextMessage("[BASIC-COMPLETE]"));
-                
-                // Generate Advanced optimization
-                session.sendMessage(new TextMessage("[ADVANCED-START]"));
-                StringBuilder advancedContent = new StringBuilder();
-                String advancedPrompt = buildAdvancedOptimizePrompt(baseResume, jobDescription);
-                
-                openAIService.callOpenAIStream(advancedPrompt, chunk -> {
-                    try {
-                        advancedContent.append(chunk);
-                        session.sendMessage(new TextMessage("[ADVANCED-TOKEN]" + chunk));
-                    } catch (Exception e) {
-                        System.err.println("Error sending advanced message: " + e.getMessage());
-                    }
-                });
-                session.sendMessage(new TextMessage("[ADVANCED-COMPLETE]"));
-                
                 session.sendMessage(new TextMessage("[DONE]"));
             } catch (Exception e) {
                 try {
@@ -81,59 +77,84 @@ public class ResumeOptimizationHandler extends TextWebSocketHandler {
         });
     }
     
-    private String buildOptimizePrompt(String baseResume, String pointsToAdd, String jd) {
-        return "Task: Minimize changes to base resume while maximizing ATS score for the target JD (CLUSTER PROCESSED). Show only essential modifications.\n" +
-                "Inputs:\n\n" +
-                "Base Resume: " + baseResume + "\n\n" +
-                "Points to add (skip if exists already in base resume): " + pointsToAdd + "\n\n" +
-                "Target JD: " + jd + "\n\n" +
-                "First, identify:\n\n" +
-                "Company type (startup/enterprise) & role level (junior/senior/lead)\n" +
-                "Top 10 ATS keywords from JD missing in base resume\n\n" +
-                "Output Format - CHANGES ONLY:\n" +
-                "Summary Section\n[original phrase] → [new phrase with keywords]\n" +
-                "Skills\nAdd: [missing critical skills from JD]\n" +
-                "Experience Bullets (only if keyword-critical)\n[Company, Role]\n\n[original bullet] → [bullet with naturally integrated JD keywords]\n\n" +
-                "Quick Adds\n\n\n" +
-                "Rules:\n\n" +
-                "DON'T change: numbers, metrics, actual achievements\n" +
-                "ONLY change: generic terms → JD-specific keywords\n" +
-                "Keep all changes truthful\n" +
-                "Max 5-7 total modifications\n\n" +
-                "Impact: Current ATS match: X% → After changes: Y%";
+    private String buildOptimizePrompt(String baseResume, String masterResume, String jd) {
+        return String.format("""
+            RESUME OPTIMIZATION ANALYSIS - Changes Needed
+            
+            Job Description:
+            %s
+            
+            Current Base Resume:
+            %s
+            
+            Master Resume Database (all experiences):
+            %s
+            
+            TASK: Compare the base resume against the job requirements and provide clear, well-formatted recommendations.
+            
+            OUTPUT FORMAT (Use exactly this structure with proper spacing and formatting):
+            
+            ## 🔄 RECOMMENDED CHANGES
+            
+            ### ❌ REMOVE FROM BASE RESUME
+            
+            **Experience 1:**
+            • [Brief summary of why removing]
+            • Full bullet point text here
+            
+            **Experience 2:**
+            • [Brief summary of why removing]
+            • Full bullet point text here
+            
+            ---
+            
+            ### ✅ ADD FROM MASTER RESUME
+            
+            **Better Match 1:**
+            • **Why relevant:** [Brief explanation of job match]
+            • **Experience:** Full bullet point text from master resume (EXACT text)
+            
+            **Better Match 2:**
+            • **Why relevant:** [Brief explanation of job match]  
+            • **Experience:** Full bullet point text from master resume (EXACT text)
+            
+            ---
+            
+            ### 🎯 KEY IMPROVEMENTS
+            
+            **Critical Skills to Highlight:**
+            • [Skill 1]: Present in master resume but underemphasized
+            • [Skill 2]: Mentioned in job but missing from base
+            
+            **Strategic Recommendations:**
+            • [Suggestion 1 for better positioning]
+            • [Suggestion 2 for skill emphasis]
+            
+            RULES:
+            - Use EXACT text from master resume (no modifications)
+            - Keep explanations brief and actionable
+            - Focus on 4-6 most impactful changes
+            - Use proper markdown formatting with emojis and spacing
+            """, jd, baseResume, masterResume);
     }
 
-    private String buildAdvancedOptimizePrompt(String baseResume, String jd) {
-        return String.format(
-            "Advanced ATS Resume Optimization (CLUSTER PROCESSED)\n\n" +
-            "Job Description:\n%s\n\n" +
-            "Current Resume:\n%s\n\n" +
-            "TASK: Provide strategic ATS optimization with line-by-line recommendations.\n\n" +
-            "ANALYSIS REQUIRED:\n" +
-            "1. Extract primary keywords (3+ mentions) and secondary keywords (1-2 mentions)\n" +
-            "2. For each resume section, provide:\n" +
-            "   - ORIGINAL: [current text]\n" +
-            "   - OPTIMIZED: [enhanced with keywords]\n" +
-            "   - IMPACT: [ATS score 1-10]\n\n" +
-            "3. Skill Gap Analysis:\n" +
-            "   - Critical gaps requiring immediate attention\n" +
-            "   - Transferable skills to emphasize\n\n" +
-            "4. ATS Score Prediction:\n" +
-            "   - Hard/Soft skills match\n" +
-            "   - Experience alignment\n" +
-            "   - Overall percentage\n\n" +
-            "OUTPUT FORMAT:\n" +
-            "Quick Wins (5-7 immediate changes)\n" +
-            "Line-by-Line Optimizations\n" +
-            "Skill Development Roadmap\n" +
-            "Final Optimized Resume\n\n" +
-            "RULES:\n" +
-            "- Natural keyword integration (no stuffing)\n" +
-            "- Maintain truthfulness\n" +
-            "- Add metrics where missing\n" +
-            "- Focus on measurable impact",
-            jd, baseResume
-        );
+    // Advanced prompt moved to OpenAIService for Step 5 generation
+    
+    private String getMasterResumeData() {
+        try {
+            // Try to get from latest resume data (bullet points)
+            var resumeData = localStorageService.getLatestResumeData();
+            if (resumeData != null && resumeData.getResumePoints() != null && !resumeData.getResumePoints().isEmpty()) {
+                return String.join("\n", resumeData.getResumePoints());
+            }
+            
+            // Fallback to base resume if master data not available
+            String baseText = localStorageService.getBaseResumeText();
+            return baseText != null ? baseText : "";
+        } catch (Exception e) {
+            System.err.println("Error loading master resume data: " + e.getMessage());
+            return "";
+        }
     }
 
     @Override

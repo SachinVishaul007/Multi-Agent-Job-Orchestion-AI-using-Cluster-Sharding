@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Resume Persistence</title>
+    <script>
+        function testLocalStorage() {
+            // Simulate storing resume info
+            const resumeInfo = {
+                masterResumeFile: 'test_master_resume.xlsx',
+                baseResumeFile: 'test_base_resume.pdf',
+                uploadedAt: new Date().toISOString(),
+                detectedTags: ['java', 'spring boot', 'microservices']
+            };
+            
+            localStorage.setItem('uploadedResumeInfo', JSON.stringify(resumeInfo));
+            console.log('Stored resume info:', resumeInfo);
+            
+            // Test retrieval
+            const stored = localStorage.getItem('uploadedResumeInfo');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                console.log('Retrieved resume info:', parsed);
+                document.getElementById('result').innerHTML = `
+                    <div style="border: 1px solid green; padding: 10px; margin: 10px;">
+                        <h3>✅ localStorage Test Success</h3>
+                        <p><strong>Master Resume:</strong> ${parsed.masterResumeFile}</p>
+                        <p><strong>Base Resume:</strong> ${parsed.baseResumeFile}</p>
+                        <p><strong>Tags:</strong> ${parsed.detectedTags.join(', ')}</p>
+                        <p><strong>Uploaded:</strong> ${new Date(parsed.uploadedAt).toLocaleString()}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function clearStorage() {
+            localStorage.removeItem('uploadedResumeInfo');
+            document.getElementById('result').innerHTML = '<div style="border: 1px solid red; padding: 10px; margin: 10px;">localStorage cleared</div>';
+        }
+        
+        window.onload = function() {
+            // Check if there's existing data
+            const existing = localStorage.getItem('uploadedResumeInfo');
+            if (existing) {
+                document.getElementById('existing').innerHTML = `
+                    <div style="border: 1px solid blue; padding: 10px; margin: 10px;">
+                        <h3>Existing Data Found:</h3>
+                        <pre>${existing}</pre>
+                    </div>
+                `;
+            }
+        };
+    </script>
+</head>
+<body>
+    <h1>Resume localStorage Test</h1>
+    
+    <div id="existing"></div>
+    
+    <button onclick="testLocalStorage()">Test Store Resume Info</button>
+    <button onclick="clearStorage()">Clear Storage</button>
+    
+    <div id="result"></div>
+    
+    <h3>Test the Real Application:</h3>
+    <p><a href="http://localhost:8080" target="_blank">Open Resume Application</a></p>
+</body>
+</html>

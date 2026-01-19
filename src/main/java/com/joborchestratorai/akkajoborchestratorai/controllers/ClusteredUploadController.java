@@ -50,10 +50,11 @@ public class ClusteredUploadController {
 
             String originalFilename = file.getOriginalFilename();
             if (originalFilename == null ||
-                    (!originalFilename.endsWith(".xlsx") && !originalFilename.endsWith(".xls"))) {
+                    (!originalFilename.endsWith(".xlsx") && !originalFilename.endsWith(".xls") && 
+                     !originalFilename.endsWith(".pdf") && !originalFilename.endsWith(".docx"))) {
                 return ResponseEntity.badRequest().body(Map.of(
                         "status", "error",
-                        "error", "Please upload a valid Excel file (.xlsx or .xls)"
+                        "error", "Please upload a valid resume file (.xlsx, .xls, .pdf, or .docx)"
                 ));
             }
 
@@ -62,72 +63,27 @@ public class ClusteredUploadController {
             String datasetId = generateDatasetId(companyDomain);
 
             // Save file temporarily for processing
-            Path tempFile = Files.createTempFile("resume-cluster-", ".xlsx");
+            String fileExtension = originalFilename.substring(originalFilename.lastIndexOf("."));
+            Path tempFile = Files.createTempFile("resume-cluster-", fileExtension);
             file.transferTo(tempFile.toFile());
 
-            // Process Excel file and extract data locally first
+            // Process file based on format and extract data
             Set<String> tags = new LinkedHashSet<>();
             List<String> bullets = new ArrayList<>();
             List<com.joborchestratorai.akkajoborchestratorai.models.ResumeRow> rowsOut = new ArrayList<>();
             
-            try (java.io.FileInputStream fis = new java.io.FileInputStream(tempFile.toFile());
-                 org.apache.poi.ss.usermodel.Workbook workbook = org.apache.poi.ss.usermodel.WorkbookFactory.create(fis)) {
-                org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
-                if (sheet != null) {
-                    org.apache.poi.ss.usermodel.Row header = sheet.getRow(0);
-                    int tagColIdx = -1;
-                    if (header != null) {
-                        for (org.apache.poi.ss.usermodel.Cell c : header) {
-                            if (c != null && c.getCellType() == org.apache.poi.ss.usermodel.CellType.STRING) {
-                                String v = c.getStringCellValue();
-                                if (v != null && v.trim().equalsIgnoreCase("Detected Tags")) {
-                                    tagColIdx = c.getColumnIndex();
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if (tagColIdx == -1) {
-                        tagColIdx = 1; // fallback to column B
-                    }
-
-                    for (int r = 1; r <= sheet.getLastRowNum(); r++) {
-                        org.apache.poi.ss.usermodel.Row row = sheet.getRow(r);
-                        if (row == null) continue;
-                        
-                        // bullet text (col A)
-                        String bulletText = null;
-                        org.apache.poi.ss.usermodel.Cell bulletCell = row.getCell(0);
-                        if (bulletCell != null && bulletCell.getCellType() == org.apache.poi.ss.usermodel.CellType.STRING) {
-                            bulletText = bulletCell.getStringCellValue();
-                            if (bulletText != null && !bulletText.trim().isEmpty()) {
-                                bullets.add(bulletText.trim());
-                            }
-                        }
-                        
-                        // tags (detected) col tagColIdx
-                        org.apache.poi.ss.usermodel.Cell tagCell = row.getCell(tagColIdx);
-                        List<String> rowTags = new ArrayList<>();
-                        if (tagCell != null) {
-                            String cellText = null;
-                            if (tagCell.getCellType() == org.apache.poi.ss.usermodel.CellType.STRING) {
-                                cellText = tagCell.getStringCellValue();
-                            } else if (tagCell.getCellType() == org.apache.poi.ss.usermodel.CellType.NUMERIC) {
-                                cellText = String.valueOf(tagCell.getNumericCellValue());
-                            }
-                            if (cellText != null) {
-                                for (String p : cellText.split(",")) {
-                                    String t = p.trim();
-                                    if (!t.isEmpty()) { 
-                                        tags.add(t); 
-                                        rowTags.add(t); 
-                                    }
-                                }
-                            }
-                        }
-                        if (bulletText != null && !rowTags.isEmpty()) {
-                            rowsOut.add(new com.joborchestratorai.akkajoborchestratorai.models.ResumeRow(bulletText.trim(), rowTags));
-                        }
+            // Extract text content based on file format
+            String masterResumeText = extractTextFromFile(tempFile.toFile(), originalFilename);
+            
+            // Convert text to bullet points (split by lines/paragraphs)
+            if (masterResumeText != null && !masterResumeText.trim().isEmpty()) {
+                String[] lines = masterResumeText.split("[\\r\\n]+");
+                for (String line : lines) {
+                    String trimmed = line.trim();
+                    if (!trimmed.isEmpty() && trimmed.length() > 10) { // Filter meaningful content
+                        bullets.add(trimmed);
+                        // Create row without tags (simplified approach)
+                        rowsOut.add(new com.joborchestratorai.akkajoborchestratorai.models.ResumeRow(trimmed, List.of()));
                     }
                 }
             }
@@ -244,5 +200,80 @@ public class ClusteredUploadController {
 
     private String generateDatasetId(String companyDomain) {
         return companyDomain + "-resumes-" + System.currentTimeMillis();
+    }
+    
+    private String extractTextFromFile(java.io.File file, String filename) {
+        String lowerFilename = filename.toLowerCase();
+        try {
+            if (lowerFilename.endsWith(".pdf")) {
+                return extractPdfText(file);
+            } else if (lowerFilename.endsWith(".docx")) {
+                return extractDocxText(file);
+            } else if (lowerFilename.endsWith(".xlsx") || lowerFilename.endsWith(".xls")) {
+                return extractExcelText(file);
+            }
+        } catch (Exception e) {
+            System.err.println("Error extracting text from " + filename + ": " + e.getMessage());
+        }
+        return "";
+    }
+    
+    private String extractPdfText(java.io.File file) throws Exception {
+        try (org.apache.pdfbox.pdmodel.PDDocument document = org.apache.pdfbox.Loader.loadPDF(file)) {
+            org.apache.pdfbox.text.PDFTextStripper stripper = new org.apache.pdfbox.text.PDFTextStripper();
+            return stripper.getText(document);
+        }
+    }
+    
+    private String extractDocxText(java.io.File file) throws Exception {
+        try (java.io.FileInputStream fis = new java.io.FileInputStream(file);
+             org.apache.poi.xwpf.usermodel.XWPFDocument document = new org.apache.poi.xwpf.usermodel.XWPFDocument(fis)) {
+            
+            StringBuilder text = new StringBuilder();
+            for (org.apache.poi.xwpf.usermodel.XWPFParagraph paragraph : document.getParagraphs()) {
+                text.append(paragraph.getText()).append("\n");
+            }
+            
+            // Extract text from tables too
+            for (org.apache.poi.xwpf.usermodel.XWPFTable table : document.getTables()) {
+                for (org.apache.poi.xwpf.usermodel.XWPFTableRow row : table.getRows()) {
+                    for (org.apache.poi.xwpf.usermodel.XWPFTableCell cell : row.getTableCells()) {
+                        text.append(cell.getText()).append(" ");
+                    }
+                    text.append("\n");
+                }
+            }
+            
+            return text.toString();
+        }
+    }
+    
+    private String extractExcelText(java.io.File file) throws Exception {
+        try (java.io.FileInputStream fis = new java.io.FileInputStream(file);
+             org.apache.poi.ss.usermodel.Workbook workbook = org.apache.poi.ss.usermodel.WorkbookFactory.create(fis)) {
+            
+            StringBuilder text = new StringBuilder();
+            org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
+            
+            for (org.apache.poi.ss.usermodel.Row row : sheet) {
+                for (org.apache.poi.ss.usermodel.Cell cell : row) {
+                    if (cell != null) {
+                        switch (cell.getCellType()) {
+                            case STRING:
+                                text.append(cell.getStringCellValue()).append(" ");
+                                break;
+                            case NUMERIC:
+                                text.append(cell.getNumericCellValue()).append(" ");
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                }
+                text.append("\n");
+            }
+            
+            return text.toString();
+        }
     }
 }

@@ -162,7 +162,7 @@
             <version>1.15.4</version>
         </dependency>
 
-        <!-- Apache POI for Excel -->
+        <!-- Apache POI for Excel and Word -->
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi</artifactId>
@@ -171,6 +171,11 @@
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi-ooxml</artifactId>
+            <version>${poi.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-scratchpad</artifactId>
             <version>${poi.version}</version>
         </dependency>
 
